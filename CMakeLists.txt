@@ -10,8 +10,8 @@ project(simFluid LANGUAGES C CXX)
 #add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/external/libSimCommon)
 
 # Load the libDPLS library.
-message("Loading the libDPLS library.")
-add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/external/libDPLS)
+message("Loading the DPLS library.")
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/external/DPLS)
 
 # Points CMAKE to directory containing FindLIBIGL.cmake and other CMAKE find files.
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
