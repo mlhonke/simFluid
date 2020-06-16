@@ -6,6 +6,7 @@
 #include <cuda_runtime.h>
 #include "cuda_errorcheck.hpp"
 #include "sim_label.hpp"
+#include "sim_utils.hpp"
 
 Sim::Sim(SimParams C)
     :
@@ -23,26 +24,12 @@ Sim::Sim(SimParams C)
 //    plot = new DisplayWindow(*this);
     omp_set_num_threads(8);
     std::cout << "Number of threads available for Eigen to use: " << Eigen::nbThreads() << std::endl;
-
     std::cout << "Running a simulation in a " << sim_w << " X " << sim_h << " X " << sim_d << " volume." << std::endl;
 
-    // Setup the 3 cubes of velocity values (u, v, w). Rely on copy of each object.
-    V[0] = (CubeX(grid_w+1, grid_h, grid_d, arma::fill::zeros));
-    V[1] = (CubeX(grid_w, grid_h+1, grid_d, arma::fill::zeros));
-    V[2] = (CubeX(grid_w, grid_h, grid_d+1, arma::fill::zeros));
-
-    V_solid[0] = (CubeX(grid_w+1, grid_h, grid_d, arma::fill::zeros));
-    V_solid[1] = (CubeX(grid_w, grid_h+1, grid_d, arma::fill::zeros));
-    V_solid[2] = (CubeX(grid_w, grid_h, grid_d+1, arma::fill::zeros));
-
-    // Setup device parameter structure.
-    cuda_check(cudaMalloc(&DEV_C, sizeof(SimParams)))
-    cuda_check(cudaMemcpy(DEV_C, &C, sizeof(SimParams), cudaMemcpyHostToDevice))
-
-    // Allocating space for velocities on device.
-    cuda_check(cudaMalloc(&DEV_V[0], n_vel_x*sizeof(scalar_t)))
-    cuda_check(cudaMalloc(&DEV_V[1], n_vel_y*sizeof(scalar_t)))
-    cuda_check(cudaMalloc(&DEV_V[2], n_vel_z*sizeof(scalar_t)))
+    init_mac_velocities(C, V);
+    init_mac_velocities(C, V_solid);
+    init_cuda_mac_velocities(V, DEV_V);
+    DEV_C = copy_params_to_device(C);
 
     fluid_label = new SimLabel(*this, false);
 //    test_cuda_interpolation();
@@ -66,24 +53,6 @@ void Sim::load_data(){
     V[2].load("V2.bin");
     update_velocities_on_device();
     fluid_label->load_data("label.bin");
-}
-
-void Sim::update_velocities_on_host(){
-    cuda_check(cudaMemcpy(V[0].memptr(), DEV_V[0], n_vel_x*sizeof(scalar_t), cudaMemcpyDeviceToHost))
-    cuda_check(cudaMemcpy(V[1].memptr(), DEV_V[1], n_vel_y*sizeof(scalar_t), cudaMemcpyDeviceToHost))
-    cuda_check(cudaMemcpy(V[2].memptr(), DEV_V[2], n_vel_z*sizeof(scalar_t), cudaMemcpyDeviceToHost))
-}
-
-void Sim::update_velocities_on_device(){
-    cuda_check(cudaMemcpy(DEV_V[0], V[0].memptr(), n_vel_x*sizeof(scalar_t), cudaMemcpyHostToDevice))
-    cuda_check(cudaMemcpy(DEV_V[1], V[1].memptr(), n_vel_y*sizeof(scalar_t), cudaMemcpyHostToDevice))
-    cuda_check(cudaMemcpy(DEV_V[2], V[2].memptr(), n_vel_z*sizeof(scalar_t), cudaMemcpyHostToDevice))
-}
-
-void Sim::free_velocities_on_device(){
-    cuda_check(cudaFree(DEV_V[0]));
-    cuda_check(cudaFree(DEV_V[1]));
-    cuda_check(cudaFree(DEV_V[2]));
 }
 
 bool Sim::is_coord_valid(Vector3i I){
@@ -147,4 +116,16 @@ Vector3ui Sim::convert_index_to_coords(unsigned int d, unsigned int rows, unsign
 
 bool Sim::run_unit_tests() {
     return true;
+}
+
+void Sim::update_velocities_on_host() {
+    update_mac_velocities_on_host(V, DEV_V);
+}
+
+void Sim::update_velocities_on_device() {
+    update_mac_velocities_on_device(V, DEV_V);
+}
+
+void Sim::free_velocities_on_device() {
+    free_mac_velocities_on_device(DEV_V);
 }

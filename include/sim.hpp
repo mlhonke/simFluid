@@ -2,9 +2,12 @@
 #define SIM_HPP
 
 #include <armadillo>
-#include "sim_params.hpp"
 #include <set>
 #include <fstream>
+
+#include "sim_params.hpp"
+#include "sim_external_types.hpp"
+
 
 class DisplayWindow;
 class SimLabel;
@@ -23,7 +26,7 @@ public:
     // Test cases
     bool test_cuda_interpolation();
 
-    scalar_t max_dt = 10.0;
+    scalar_t max_dt = 0.1;
     scalar_t t = 0;
     scalar_t dt = 0.0;
     scalar_t render_dt = 0.02;

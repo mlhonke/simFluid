@@ -1,12 +1,13 @@
 #ifndef SIM_WATER_HPP
 #define SIM_WATER_HPP
 
+#include <vector>
+#include <queue>
+
 #include "sim.hpp"
 #include "recorder.h"
-#include <vector>
 #include "sim_params_water.hpp"
 #include "eigen_types.hpp"
-#include <queue>
 #include "execTimer.hpp"
 
 class SimPLSCUDA;

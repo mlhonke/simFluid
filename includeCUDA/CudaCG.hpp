@@ -4,14 +4,12 @@
 
 #ifndef FERRO3D_CUDACG_HPP
 #define FERRO3D_CUDACG_HPP
-#include "sim_params.hpp"
-// includes, system
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
 
-
+#include "sim_params.hpp"
 #include <cublas_v2.h>
 #include <cusparse.h>
 #include <cuda_runtime.h>

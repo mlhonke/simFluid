@@ -37,9 +37,8 @@ option(LIBIGL_WITH_PNG               "Use PNG"           ON)
 find_package(LIBIGL REQUIRED)
 
 set(CMAKE_CXX_STANDARD 11)
-SET(CMAKE_CXX_FLAGS "-std=c++11 -g -fopenmp")
+SET(CMAKE_CXX_FLAGS "-std=c++11 -O3 -fopenmp")
 SET(CMAKE_EXE_LINKER_FLAGS  "-lX11 -lXi -lXrandr -lXxf86vm -lXinerama -lXcursor -lrt -lm -L/usr/local/cuda/lib64 -L/usr/local/cuda/lib64/cublas -L/usr/local/cuda/lib64/libcusparse.so -L/usr/local/cuda/lib64/culibos -L/usr/local/cuda/lib64/cudart -ldl")
-set(CUDA_SEPARATE_COMPILATION ON)
 #set(CMAKE_RUNTIME_LIBRARY STATIC)
 
 find_package(Armadillo REQUIRED QUIET)
@@ -54,22 +53,20 @@ add_library(simFluid STATIC
         ${simFluidHeaders}
         ${simFluidSources}
         ${marchingTets})
-target_compile_options(simFluid PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:
-        -ccbin gcc-8
-        -arch=sm_60
-        >)
+
 target_include_directories(simFluid PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/external/libSimCommon/include)
 target_include_directories(simFluid PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/external/libSimCommon/includeCUDA)
+target_include_directories(simFluid PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/external/DPLS/include)
+target_include_directories(simFluid PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/external/DPLS/includeCUDA)
 target_include_directories(simFluid PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_include_directories(simFluid PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/marching_tets)
 
-target_link_libraries(simFluid simCommon)
 target_link_libraries(simFluid DPLS)
-target_link_libraries (simFluid Eigen3::Eigen)
+target_link_libraries(simFluid Eigen3::Eigen)
 #target_link_libraries(simFluid glad)
 
 find_library(CUDART_LIBRARY cudart ${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES})
-target_include_directories(simFluid PRIVATE ${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES})
+target_include_directories(simFluid PUBLIC ${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES})
 target_link_libraries(simFluid ${CUDART_LIBRARY})
 
 find_package(CUDA)
@@ -79,6 +76,10 @@ set_target_properties(simFluid PROPERTIES CUDA_ARCHITECTURES 60)
 target_link_libraries(simFluid ${CUDA_LIBRARY}) # unnecessary?
 target_link_libraries(simFluid ${CUDA_cusparse_LIBRARY})
 target_link_libraries(simFluid ${CUDA_cublas_LIBRARY})
+
+target_compile_options(simFluid PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:
+        -ccbin gcc-8
+        >)
 
 #find_package(OpenGL REQUIRED)
 #target_link_libraries(simFluid OpenGL::GL)

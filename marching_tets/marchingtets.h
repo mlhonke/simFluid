@@ -4,6 +4,7 @@
 #include "hashtable.h"
 #include "vec.h"
 #include "sim_params.hpp"
+#include "sim_external_types.hpp"
 
 namespace marchingtets {
 

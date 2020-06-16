@@ -2,6 +2,7 @@
 // Created by graphics on 02/05/19.
 //
 
+#include <iostream>
 #include "CudaCG.hpp"
 #include "cuda_errorcheck.hpp"
 

@@ -1,5 +1,6 @@
 #include "sim_water.hpp"
-#include "sim_levelset.hpp"
+//#include "sim_levelset.hpp"
+#include "sim_pls_cuda.hpp"
 
 int main(int argc, char** argv){
     // Build the parameter structures to setup the simulation.
@@ -10,7 +11,7 @@ int main(int argc, char** argv){
     SimWater sim = SimWater(*params, *water_params);
 
     // Choose a surface tracking method and make an initial surface.
-    auto level_set = new SimLevelSet(*params, sim.DEV_C, sim.DEV_V);
+    auto level_set = new SimPLSCUDA(*params, sim.DEV_C, sim.DEV_V);
     Vector3 corner = {params->grid_w/4.0, params->grid_w/4.0, params->grid_w/4.0};
     level_set->initialize_level_set_rectangle(corner, 3.0*corner);
     sim.initialize_fluid(level_set);

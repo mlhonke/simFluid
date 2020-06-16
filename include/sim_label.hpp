@@ -5,6 +5,7 @@
 #ifndef FERRO3D_SIM_LABEL_HPP
 #define FERRO3D_SIM_LABEL_HPP
 
+#include "sim_external_types.hpp"
 #include "sim_params_water.hpp"
 #include "sim.hpp"
 #include <queue>

@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.12)
 SET(CMAKE_C_COMPILER /usr/bin/gcc-8)
 SET(CMAKE_CXX_COMPILER /usr/bin/g++-8)
 
-project(testSimFluid LANGUAGES C CXX)
+project(freefall LANGUAGES C CXX)
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../../include)
 
@@ -11,5 +11,5 @@ add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../.. ${CMAKE_CURRENT_SOURCE_DIR}/b
 
 SET(CMAKE_CXX_FLAGS "-std=c++11 -g -fopenmp")
 
-add_executable(testSimFluid main.cpp)
-target_link_libraries(testSimFluid simFluid)
+add_executable(freefall main.cpp)
+target_link_libraries(freefall simFluid)

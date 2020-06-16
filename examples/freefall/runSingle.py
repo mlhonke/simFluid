@@ -15,7 +15,7 @@ dx = 1.0/60.0
 g = -9.8
 # SimWaterParams
 density = 1000.0
-sft = 0.000
+sft = 0.0000
 nu = 0.0
 
 paramNames = ["n_steps",
@@ -63,7 +63,7 @@ args = paramListToArgs(paramList)
 
 print(args)
 
-os.system("./testSimFluid" + args)
+os.system("./freefall" + args)
 os.chdir("../screens")
 videoName = tName
 os.system("ffmpeg -i screen_%07d.png -c:v libx264 " + videoName + ".mp4")
