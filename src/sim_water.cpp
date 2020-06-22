@@ -1,12 +1,9 @@
 #include <iostream>
-#include <iomanip>
-#include <limits>
 #include <cmath>
 #include <algorithm>
 #include <thread>
 #include <mutex>
 #include <condition_variable>
-#include <future>
 
 #include "interpolate.hpp"
 #include "sim_water.hpp"
@@ -157,6 +154,9 @@ void SimWater::create_params_from_args(int argc, char **argv, int &n_steps, SimP
                 std::stoi(argv[i++]),
                 std::stoi(argv[i++]),
                 std::stoi(argv[i++]),
+                std::stof(argv[i++]),
+                std::stof(argv[i++]),
+                std::stof(argv[i++]),
                 std::stof(argv[i++])
         };
         retCW = new SimWaterParams{
@@ -173,8 +173,6 @@ void SimWater::create_params_from_args(int argc, char **argv, int &n_steps, SimP
         retCW = new SimWaterParams();
     }
 }
-
-
 
 void SimWater::save_data(){
     Sim::save_data();
@@ -194,133 +192,25 @@ void SimWater::step(){
     }
 
     elapsed_time += dt;
-    dt = 0.5*get_new_timestep(V);
-//    if (elapsed_time + dt >= render_time - 1E-14) {
-//        dt = render_time - elapsed_time;
-//        render_time += render_dt;
-//        do_render = true;
-//    }
+    dt = get_new_timestep(V);
+    if (elapsed_time + dt >= render_time - 1E-14) {
+        dt = render_time - elapsed_time;
+        render_time += render_dt;
+        do_render = true;
+    }
+
     std::cout << "Time Step = " << dt << " Time I" << cur_step << " Total elapsed: " << elapsed_time << " Render Step: " << do_render << std::endl;
 
-//    if (cur_step == 0){
-//        dt = -0.1*scale_w/g;
-//    } else {
-//        dt = 0.1*get_new_timestep(V);
-//    }
-
-#ifdef DEBUGSIM
-    std::cout << "Velocities before extrapolation and after pressure update." << std::endl;
-    std::cout << std::setprecision(10) << slice_y<CubeX, MatrixX>(V[0]) << std::endl << std::endl;
-//    std::cout << std::setprecision(10) << slice_x<CubeX, MatrixX>(V[0]) << std::endl << std::endl;
-    std::cout << slice_y<CubeX, MatrixX>(V[1]) << std::endl << std::endl;
-//    std::cout << slice_x<CubeX, MatrixX>(V[1]) << std::endl << std::endl;
-    std::cout << slice_y<CubeX, MatrixX>(V[2]) << std::endl << std::endl;
-//    std::cout << slice_x<CubeX, MatrixX>(V[2]) << std::endl << std::endl;
-#endif
-
-
-//    scalar_t dt_st = 0.9*std::pow(scale_w, 1.5)*std::sqrt(density/lambda);
-//    dt = std::min(dt, dt_st);
-//    std::cout << "Surface tension time step restriction is: " << dt_st << std::endl;
-//    auto* execTimer = new ExecTimer("Extrapolate velocities");
     extrapolate_velocities_from_LS();
-//    delete execTimer;
-//    set_boundary_velocities();
-
-#ifdef DEBUGSIM
-    std::cout << "Velocities after extrapolation" << std::endl;
-    std::cout << std::setprecision(10) << slice_y<CubeX, MatrixX>(V[0]) << std::endl << std::endl;
-//    std::cout << std::setprecision(10) << slice_x<CubeX, MatrixX>(V[0]) << std::endl << std::endl;
-    std::cout << slice_y<CubeX, MatrixX>(V[1]) << std::endl << std::endl;
-//    std::cout << slice_x<CubeX, MatrixX>(V[1]) << std::endl << std::endl;
-    std::cout << slice_y<CubeX, MatrixX>(V[2]) << std::endl << std::endl;
-//    std::cout << slice_x<CubeX, MatrixX>(V[2]) << std::endl << std::endl;
-#endif
-
-//    execTimer = new ExecTimer("Update velocities on device");
     update_velocities_on_device();
-//    delete execTimer;
-
-    ExecTimer *execTimer = new ExecTimer("Advance LS");
     simLS->advance(cur_step, dt);
-//    std::cout << simLS->LS << std::endl;
-    delete execTimer;
-
-//    execTimer = new ExecTimer("Update labels");
     update_labels_from_level_set();
-//    delete execTimer;
-//    std::cout << fluid_label->label << std::endl;
-
-//    execTimer = new ExecTimer("Advect velocities");
     advect_velocity();
-//    delete execTimer;
-
-#ifdef DEBUGSIM
-    std::cout << "LS" << std::endl;
-    std::cout << slice_y<CubeX, MatrixX>(simLS->LS) << std::endl << std::endl;
-    std::cout << "Velocities After Advection" << std::endl;
-    std::cout << std::setprecision(10) << slice_y<CubeX, MatrixX>(V[0]) << std::endl << std::endl;
-    std::cout << slice_y<CubeX, MatrixX>(V[1]) << std::endl << std::endl;
-    std::cout << slice_y<CubeX, MatrixX>(V[2]) << std::endl << std::endl;
-    std::cout << slice_y<CubeXi, MatrixXi>(label) << std::endl << std::endl;
-#endif
-
-//    execTimer = new ExecTimer("Add gravity");
     add_gravity_to_velocity(V[2], dt);
-//    delete execTimer;
-//    set_boundary_velocities();
-
-#ifdef DEBUGSIM
-     std::cout << "Velocities After Gravity" << std::endl;
-    std::cout << std::setprecision(10) << slice_y<CubeX, MatrixX>(V[0]) << std::endl << std::endl;
-    std::cout << slice_y<CubeX, MatrixX>(V[1]) << std::endl << std::endl;
-    std::cout << slice_y<CubeX, MatrixX>(V[2]) << std::endl << std::endl;
- #endif
-
-#ifdef DEBUGHF
-    MatrixXs k_vals(grid_w, grid_h);
-    MatrixXs bi_test_left(grid_w, grid_h);
-    MatrixXs bi_test_right(grid_w, grid_h);
-    for (int i = 0; i < grid_w; i++){
-        for (int j = 0; j < grid_h; j++){
-            k_vals(i,j) = simLS->get_curvature(Vector2(i*scale_w, j*scale_h));
-            bi_test_left(i,j) = grid_bilerp((i+0.5)*scale_w, (j)*scale_h, simLS->LS);
-            bi_test_right(i,j) = grid_bilerp((i-0.5)*scale_w, (j)*scale_h, simLS->LS);
-        }
-    }
-    std::cout << "Curvature values at all node points on grid." << std::endl;
-    std::cout << k_vals << std::endl;
-    std::cout << "Bilerp test values" << std::endl;
-    std::cout << bi_test_left << std::endl;
-    std::cout << "Other side now " << std::endl;
-    std::cout << bi_test_right << std::endl;
-#endif
-
-//    execTimer = new ExecTimer("Solve viscosity");
     std::cout << "Solving viscosity." << std::endl;
-    solve_viscosity(); // Should respect boundary velocities (returning them as is).
-//    set_boundary_velocities();
-//    delete execTimer;
-
-//    std::cout << "Vx vel" << std::endl;
-//    std::cout << V[0] << std::endl;
-//    std::cout << "Vy vel" << std::endl;
-//    std::cout << V[1] << std::endl;
-//    std::cout << "Vz vel" << std::endl;
-//    std::cout << V[2] << std::endl;
-
-    //calc_laplacian(*LS, LS_laplace)
-//    execTimer = new ExecTimer("Solve pressure");
+    solve_viscosity();
     std::cout << "Solving pressure." << std::endl;
     solve_pressure(fluid_label, true, false, false);
-//    delete execTimer;
-
-#ifdef DEBUGSIM
-    std::cout << "Pressure after solve" << std::endl;
-//    std::cout << std::setprecision(10) << P.slice(grid_w/2) << std::endl << std::endl;
-    std::cout << std::setprecision(10) << slice_y<CubeX, MatrixX>(P) << std::endl << std::endl;
-    std::cout << std::setprecision(10) << slice_x<CubeX, MatrixX>(P) << std::endl << std::endl;
-#endif
 
 //    CubeX divs = CubeX(grid_w, grid_h, grid_d, arma::fill::zeros);
 //    check_divergence(divs);
@@ -328,12 +218,10 @@ void SimWater::step(){
 //    std::cout << divs << std::endl;
 
     cur_step++;
-    if (do_render || cur_step%1 == 0) {
-//        execTimer = new ExecTimer("Render");
+    if (do_render) {
         update_triangle_mesh();
         update_viewer_triangle_mesh();
         do_render = false;
-//        delete execTimer;
     }
 }
 

@@ -3,8 +3,6 @@
 #include "interpolate.hpp"
 #include "eigen_types.hpp"
 #include "unit.cuh"
-#include <cuda_runtime.h>
-#include "cuda_errorcheck.hpp"
 #include "sim_label.hpp"
 #include "sim_utils.hpp"
 
@@ -19,7 +17,10 @@ Sim::Sim(SimParams C)
     sim_w(C.sim_w),
     sim_h(C.sim_h),
     sim_d(C.sim_d),
-    n_cells(C.n_cells)
+    n_cells(C.n_cells),
+    frac_cfl(C.frac_cfl),
+    max_dt(C.max_dt),
+    render_dt(C.render_dt)
     {
 //    plot = new DisplayWindow(*this);
     omp_set_num_threads(8);
@@ -30,11 +31,7 @@ Sim::Sim(SimParams C)
     init_mac_velocities(C, V_solid);
     init_cuda_mac_velocities(V, DEV_V);
     DEV_C = copy_params_to_device(C);
-
     fluid_label = new SimLabel(*this, false);
-//    test_cuda_interpolation();
-//    test_cuda_RK3_advection(*this);
-
     logfile.open("logfile.txt");
 }
 
@@ -90,20 +87,13 @@ scalar_t Sim::get_max_vel(const macVel &V_in){
 
 scalar_t Sim::get_new_timestep(const macVel &V_in){
     scalar_t max_vel = get_max_vel(V_in);
-//    max_vel += std::sqrt(scale_w*std::abs(g));
+    scalar_t new_dt = frac_cfl*std::abs(scale_w / max_vel);
 
-    if (cur_step == 0){
-        return 0.1;
-    }
-
-    scalar_t new_dt;
-    if ((std::abs(scale_w / max_vel) < max_dt)) {
-        new_dt = std::abs(scale_w/max_vel);
+    if (new_dt > max_dt || cur_step == 0) {
+        return max_dt;
     } else {
-        new_dt = max_dt;
+        return new_dt;
     }
-
-    return new_dt;
 }
 
 Vector3ui Sim::convert_index_to_coords(unsigned int d, unsigned int rows, unsigned int cols){
@@ -112,10 +102,6 @@ Vector3ui Sim::convert_index_to_coords(unsigned int d, unsigned int rows, unsign
     unsigned int k = d / (cols * rows);
 
     return {i, j, k};
-}
-
-bool Sim::run_unit_tests() {
-    return true;
 }
 
 void Sim::update_velocities_on_host() {

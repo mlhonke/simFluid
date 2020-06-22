@@ -1,6 +1,0 @@
-[submodule "external/libSimCommon"]
-	path = external/libSimCommon
-	url = https://github.com/mlhonke/libSimCommon.git
-[submodule "external/DPLS"]
-	path = external/DPLS
-	url = https://github.com/mlhonke/DPLS.git

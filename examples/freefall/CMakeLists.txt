@@ -9,7 +9,7 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../../include)
 
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../.. ${CMAKE_CURRENT_SOURCE_DIR}/build EXCLUDE_FROM_ALL)
 
-SET(CMAKE_CXX_FLAGS "-std=c++11 -g -fopenmp")
+SET(CMAKE_CXX_FLAGS "-std=c++11 -O3 -fopenmp")
 
 add_executable(freefall main.cpp)
 target_link_libraries(freefall simFluid)

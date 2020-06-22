@@ -5,14 +5,6 @@ SET(CMAKE_CXX_COMPILER /usr/bin/g++-8)
 
 project(simFluid LANGUAGES C CXX)
 
-## Load the libSimCommon library.
-#message("Loading the libSimCommon library.")
-#add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/external/libSimCommon)
-
-# Load the libDPLS library.
-message("Loading the DPLS library.")
-add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/external/DPLS)
-
 # Points CMAKE to directory containing FindLIBIGL.cmake and other CMAKE find files.
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 
@@ -27,7 +19,6 @@ include(CheckLanguage)
 check_language(CUDA)
 
 include_directories(/usr/local/cuda/samples/common/inc/)
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/includeCUDA)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/external/libigl/include)
 
 option(LIBIGL_WITH_OPENGL            "Use OpenGL"         ON)
@@ -47,21 +38,27 @@ include_directories(${ARMADILLO_INCLUDE_DIRS})
 file(GLOB simFluidHeaders ${CMAKE_CURRENT_SOURCE_DIR}/include/*)
 file(GLOB simFluidCUDAHeaders ${CMAKE_CURRENT_SOURCE_DIR}/includeCUDA/*)
 file(GLOB simFluidSources ${CMAKE_CURRENT_SOURCE_DIR}/src/*)
+
+file(GLOB DPLSHeaders ${CMAKE_CURRENT_SOURCE_DIR}/DPLS/include/*)
+file(GLOB DPLSCUDAHeaders ${CMAKE_CURRENT_SOURCE_DIR}/DPLS/includeCUDA/*)
+file(GLOB DPLSSources ${CMAKE_CURRENT_SOURCE_DIR}/DPLS/src/*)
+
 file(GLOB marchingTets ${CMAKE_CURRENT_SOURCE_DIR}/marching_tets/*)
 add_library(simFluid STATIC
         ${simFluidCUDAHeaders}
         ${simFluidHeaders}
         ${simFluidSources}
+        ${DPLSCUDAHeaders}
+        ${DPLSHeaders}
+        ${DPLSSources}        
         ${marchingTets})
 
-target_include_directories(simFluid PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/external/libSimCommon/include)
-target_include_directories(simFluid PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/external/libSimCommon/includeCUDA)
-target_include_directories(simFluid PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/external/DPLS/include)
-target_include_directories(simFluid PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/external/DPLS/includeCUDA)
+target_include_directories(simFluid PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/DPLS/include)
+target_include_directories(simFluid PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/DPLS/includeCUDA)
 target_include_directories(simFluid PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_include_directories(simFluid PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/includeCUDA)
 target_include_directories(simFluid PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/marching_tets)
 
-target_link_libraries(simFluid DPLS)
 target_link_libraries(simFluid Eigen3::Eigen)
 #target_link_libraries(simFluid glad)
 

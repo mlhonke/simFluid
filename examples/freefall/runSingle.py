@@ -8,21 +8,27 @@ os.chdir("cmake-build-debug")
 n_steps = 1000000
 
 # SimParams
-grid_w = 60
-grid_h = 60
-grid_d = 60
-dx = 1.0/60.0
+grid_w = 30
+grid_h = 30
+grid_d = 30
+dx = 1.0/30.0
+frac_cfl = 0.5
+max_dt = 0.1
+render_dt = 0.02
 g = -9.8
 # SimWaterParams
 density = 1000.0
-sft = 0.0000
-nu = 0.0
+sft = 0.0001
+nu = 0.0001
 
 paramNames = ["n_steps",
               "grid_w",
               "grid_h",
               "grid_d",
               "dx",
+              "frac_cfl",
+              "max_dt",
+              "render_dt",
               "density",
               "sft",
               "nu",
@@ -36,6 +42,9 @@ def makeParamList():
                 grid_h,
                 grid_d,
                 dx,
+                frac_cfl,
+                max_dt,
+                render_dt,
                 density,
                 sft,
                 nu,
