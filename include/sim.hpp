@@ -1,13 +1,10 @@
 #ifndef SIM_HPP
 #define SIM_HPP
 
-#include <armadillo>
-#include <set>
 #include <fstream>
 
 #include "sim_params.hpp"
 #include "sim_external_types.hpp"
-
 
 class DisplayWindow;
 class SimLabel;

@@ -9,12 +9,15 @@ int main(int argc, char** argv){
     int n_steps;
     SimWater::create_params_from_args(argc, argv, n_steps, params, water_params);
     SimWater sim = SimWater(*params, *water_params);
+    sim.write_mesh = true;
 
     // Choose a surface tracking method and make an initial surface.
-    auto level_set = new SimLevelSet(*params, sim.DEV_C, sim.DEV_V);
-    Vector3 corner = {params->grid_w/4.0, params->grid_w/4.0, params->grid_w/8.0};
+    auto level_set = new SimPLSCUDA(*params, sim.DEV_C, sim.DEV_V);
+    Vector3 corner = {params->grid_w/4.0, params->grid_w/4.0, 1.0};
     std::cout << corner << std::endl;
-    level_set->initialize_level_set_rectangle(corner, corner + params->grid_w/2.0);
+    Vector3 corner_offset = {params->grid_w/2.0 - 1, params->grid_w/2.0 - 1, params->grid_w/3.0};
+    level_set->initialize_level_set_rectangle(corner, corner + corner_offset);
+    std::cout << level_set->LS << std::endl;
     sim.initialize_fluid(level_set);
 
     // Run the simulation.

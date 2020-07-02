@@ -30,14 +30,14 @@ public:
     scalar_t get_curvature(Vector3 &pos);
     void print_item(int* item);
 
-//    // Levelset
+    // Levelset
     scalar_t* DEV_LS, *DEV_grad_LS_x, *DEV_grad_LS_y, *DEV_grad_LS_z;
     scalar_t* DEV_LS_pos, *DEV_LS_neg;
     int* DEV_cp;
     CubeXi cp;
     CubeX LS_pos, LS_neg, LS_unsigned;
 
-//    // Three kinds of particles
+    // Three kinds of particles
     std::vector<CUVEC::Vec3d> sp;
     std::vector<CUVEC::Vec3d> pp;
     std::vector<CUVEC::Vec3d> np;
@@ -45,7 +45,7 @@ public:
     CUVEC::Vec3d *DEV_pp = nullptr;
     CUVEC::Vec3d *DEV_np = nullptr;
 
-//    // CPU version of particles
+    // CPU version of particles
     std::vector<Vector3> surface_points;
     std::vector<Vector3> pos_points;
     std::vector<Vector3> neg_points;
@@ -56,6 +56,10 @@ public:
     int* DEV_sp_count, *DEV_np_count, *DEV_pp_count;
 
     int threads_in_block;
+
+    int reseed_interval;
+    int surface_particles_per_cell;
+    int sign_particles_per_cell;
 //
 private:
     void generate_indicies_for_particles(int* DEV_p_keys, int* &DEV_p_index, int* &DEV_p_count, std::vector<int> &p_index, std::vector<int> &p_count, int n_p);
@@ -66,11 +70,8 @@ private:
     void send_particles_to_host_pls();
     void reinit_pls();
 
-    scalar_t bandwidth; //in number of cells
-    int reseed_interval;
     int iteration;
-    int surface_particles_per_cell;
-    int sign_particles_per_cell;
+    scalar_t bandwidth; //in number of cells
     int n_threads = 3;
     int n_sp, n_pp, n_np;
     int ni, nj, nk;

@@ -24,4 +24,6 @@ typedef struct SimWaterParams {
     scalar_t const g = -9.8;
 } SimWaterParams;
 
+void create_water_params_from_args(int argc, char **argv, SimWaterParams *&retCW, int &i);
+
 #endif // SIM_PARAMS_WATER_HPP

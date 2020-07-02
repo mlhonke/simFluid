@@ -1,84 +1,20 @@
 #include <iostream>
 #include <cmath>
 #include <algorithm>
-#include <thread>
-#include <mutex>
-#include <condition_variable>
 
 #include "interpolate.hpp"
 #include "sim_water.hpp"
 #include "fd_math.hpp"
 #include "sim.hpp"
 #include "advect.hpp"
-#include "sim_pls.hpp"
-#include "sim_pls_cuda.hpp"
 #include "sim_levelset.hpp"
 #include "sim_label.hpp"
 #include "marchingtets.h"
 #include "CudaCG.hpp"
-#include <igl/opengl/glfw/Viewer.h>
-#include <igl/png/writePNG.h>
+#include "sim_viewer.hpp"
 
 //static Eigen::ConjugateGradient<MatrixA, Eigen::Lower|Eigen::Upper, Eigen::IncompleteCholesky<double>> CG;
 static Eigen::ConjugateGradient<MatrixA, Eigen::Lower|Eigen::Upper> CG;
-
-template<typename T, typename R> R slice_y(const T &a){
-    return a.subcube(0, a.n_cols/2, 0, a.n_rows-1, a.n_cols/2, a.n_slices-1);
-}
-
-template<typename T, typename R> R slice_x(const T &a){
-    return a.subcube(a.n_rows/2, 0, 0, a.n_rows/2, a.n_cols-1, a.n_slices-1);
-}
-
-std::mutex viewerMtx;
-std::condition_variable viewerCV;
-bool refresh = false;
-bool refreshCheck(){
-    return refresh;
-}
-
-
-int frame_id = 0;
-bool saveScreen(igl::opengl::glfw::Viewer &v){
-    Eigen::Matrix<unsigned char,Eigen::Dynamic,Eigen::Dynamic> R(1000,1000);
-    Eigen::Matrix<unsigned char,Eigen::Dynamic,Eigen::Dynamic> G(1000,1000);
-    Eigen::Matrix<unsigned char,Eigen::Dynamic,Eigen::Dynamic> B(1000,1000);
-    Eigen::Matrix<unsigned char,Eigen::Dynamic,Eigen::Dynamic> T(1000,1000);
-    v.core().draw_buffer(v.data(),false,R,G,B,T);
-
-    //Setup filename
-    char const *prefix = "../screens/screen";
-    enum Constants { max_filename = 256 };
-    char filename[max_filename];
-    snprintf(filename, max_filename, "%s_%07d.png", prefix, frame_id++);
-
-    igl::png::writePNG(R,G,B,T,filename);
-
-    return false;
-}
-
-void runViewer(igl::opengl::glfw::Viewer* viewer, Eigen::MatrixXi &Fmesh, Eigen::MatrixXd &Vmesh, Eigen::MatrixXd &Nmesh){
-    viewer->callback_pre_draw = [&Fmesh, &Vmesh, &Nmesh](igl::opengl::glfw::Viewer & v){
-        std::unique_lock<std::mutex> lck(viewerMtx);
-        viewerCV.wait(lck, refreshCheck);
-        v.data().set_mesh(Vmesh, Fmesh);
-        v.data().set_normals(Nmesh);
-        Eigen::Vector3d diffuse, ambient, specular;
-        diffuse = Eigen::Vector3d::Constant(0.4f);
-        ambient = Eigen::Vector3d::Constant(0.1f);
-        specular = Eigen::Vector3d::Constant(0.5f);
-        v.data().uniform_colors(diffuse, ambient, specular);
-        v.data().shininess = 2.0f;
-        refresh = false; // This lets the sim thread operate on the mesh since we're done with it here.
-        saveScreen(v);
-        return false;
-    };
-    // Set Viewer to tight draw loop
-    viewer->core().is_animating = true;
-    //viewer.core().
-    // Launch viewer in this thread
-    viewer->launch(false, false, "Simulation Render", 1000, 1000);
-}
 
 SimWater::SimWater(SimParams C, SimWaterParams CW):Sim(C), density(CW.density), lambda(CW.lambda), nu(CW.nu), g(CW.g){
     // Want to use Eigen for Poisson solve, but Armadillo for everything else since need 3D representation.
@@ -89,8 +25,6 @@ SimWater::SimWater(SimParams C, SimWaterParams CW):Sim(C), density(CW.density), 
     // Setup the simulation domain ( solid boundaries, air in center )
     fluid_label->label.fill(SOLID);
     fluid_label->label.subcube(2, 2, 2, grid_w-1, grid_h-1, grid_d-1).fill(AIR);
-
-    viewer = new igl::opengl::glfw::Viewer;
 
     // Initialize pressure solve data.
     A = MatrixA(n_cells, n_cells);
@@ -108,21 +42,9 @@ SimWater::SimWater(SimParams C, SimWaterParams CW):Sim(C), density(CW.density), 
     v_new = VectorXs::Zero(grid_w*(grid_h+1)*grid_d);
     w_new = VectorXs::Zero(grid_w*grid_h*(grid_d+1));
 
+    sim_viewer = new SimViewer(C);
+    sim_viewer->launch();
 //    load_data(); // Restore a previous simulation if available
-    viewer->core().camera_dnear = 0.1f;
-    viewer->core().camera_dfar = 100.0f;
-    viewer->core().camera_view_angle = 45.0f;
-    // Sim data may be in double types, so explicitly cast to float so compiler knows this is intended.
-    Eigen::Matrix<scalar_t, 3, 1> camera_eye = {sim_w/2.0, -0.75*sim_w, 2.0*sim_d};
-    viewer->core().camera_eye = camera_eye.cast<float>();
-    Eigen::Matrix<scalar_t, 3, 1> camera_center =  {sim_w/2.0, sim_w/2.0, sim_d/2.0};
-    viewer->core().camera_center = camera_center.cast<float>();
-    viewer->core().camera_up = {0, 1, 0};
-    viewer->core().unset(viewer->data().show_lines);
-    Eigen::Matrix<scalar_t, 3, 1> light_position = {sim_w/2.0, 0.5*sim_w, 2.0*sim_d};
-    viewer->core().light_position = light_position.cast<float>();
-    std::thread viewThread (std::bind(runViewer,viewer, std::ref(Fmesh), std::ref(Vmesh), std::ref(Nmesh)));
-    viewThread.detach();
 }
 
 void SimWater::initialize_fluid(SimLevelSet *level_set){
@@ -147,31 +69,15 @@ void SimWater::create_params_from_args(int argc, char **argv, int &n_steps, SimP
 
 void SimWater::create_params_from_args(int argc, char **argv, int &n_steps, SimParams *&retC, SimWaterParams *&retCW, int &i) {
     // Create param structures on heap since they live the life of the simulation.
+    i = 1;
     if (argc > 1) {
-        i = 1;
         n_steps = std::stoi(argv[i++]);
-        retC = new SimParams{
-                std::stoi(argv[i++]),
-                std::stoi(argv[i++]),
-                std::stoi(argv[i++]),
-                std::stof(argv[i++]),
-                std::stof(argv[i++]),
-                std::stof(argv[i++]),
-                std::stof(argv[i++])
-        };
-        retCW = new SimWaterParams{
-                std::stof(argv[i++]),
-                std::stof(argv[i++]),
-                std::stof(argv[i++]),
-                std::stof(argv[i++])
-        };
     }
-        // Otherwise use default arguments.
     else {
         n_steps = 1000000;
-        retC = new SimParams();
-        retCW = new SimWaterParams();
     }
+    create_sim_params_from_args(argc, argv, retC, i);
+    create_water_params_from_args(argc, argv, retCW, i);
 }
 
 void SimWater::save_data(){
@@ -210,7 +116,7 @@ void SimWater::step(){
     std::cout << "Solving viscosity." << std::endl;
     solve_viscosity();
     std::cout << "Solving pressure." << std::endl;
-    solve_pressure(fluid_label, true, false, false);
+    solve_pressure(fluid_label, true, true, false);
 
 //    CubeX divs = CubeX(grid_w, grid_h, grid_d, arma::fill::zeros);
 //    check_divergence(divs);
@@ -243,7 +149,6 @@ void SimWater::extrapolate_velocities_from_LS() {
     extrapolate_velocity_from_LS(V[0], {-1, 0, 0});
     extrapolate_velocity_from_LS(V[1], {0, -1, 0});
     extrapolate_velocity_from_LS(V[2], {0, 0, -1});
-//    set_boundary_velocities();
 
     bool do_pressure_extrap = false;
     if (do_pressure_extrap) {
@@ -251,18 +156,10 @@ void SimWater::extrapolate_velocities_from_LS() {
         V_solid[1] = V[1];
         V_solid[2] = V[2];
         update_labels_for_air();
-    //
+
         air_label->colour_label(simLS->LS);
 
-    //    std::cout << "Velocities before extrapolation pressure solve." << std::endl;
-    //    std::cout << V[2] << std::endl;
-
-    //    std::cout << "Pressure solve for extrapolated velocities." << std::endl;
         solve_pressure(air_label, false, false, true);
-    //    std::cout << "Labels" << "\n" << label_air << std::endl;
-
-    //    std::cout << "Velocities after extrapolation pressure solve." << std::endl;
-    //    std::cout << V[2] << std::endl;
 
         V_solid[0].fill(0);
         V_solid[1].fill(0);
@@ -270,56 +167,47 @@ void SimWater::extrapolate_velocities_from_LS() {
     }
 
 //    check_divergence(divs);
-//    std::cout << "Divergence of velocity field after pressure solve." << std::endl;
-//    std::cout << divs << std::endl;
 }
 
 void SimWater::advect_velocity(){
     macVel V_new = V;
     advect_RK3_CUDA(V_new[0], {0.5, 0.0, 0.0}, DEV_V, dt, DEV_C, true, true);
     advect_RK3_CUDA(V_new[1], {0.0, 0.5, 0.0}, DEV_V, dt, DEV_C, true, true);
-//    std::cout << "Before advecting V2\n";
-//    std::cout << slice_y<CubeX, MatrixX>(V[2]) << std::endl;
     advect_RK3_CUDA(V_new[2], {0.0, 0.0, 0.5}, DEV_V, dt, DEV_C, true, true);
-//    std::cout << "After advecting V2\n";
-//    std::cout << slice_y<CubeX, MatrixX>(V[2]) << std::endl;
     V = V_new;
 }
 
 void SimWater::update_viewer_triangle_mesh(){
-    while (refresh){
-        std::cout << "Wasting time in sim for viewer to update." << std::endl;
-    }
+    sim_viewer->wait_for_viewer();
 
-    Fmesh.resize(tets->tri.size(), 3);
-    Vmesh.resize(tets->x.size(), 3);
-    Nmesh.resize(tets->x.size(), 3);
+    sim_viewer->Fmesh.resize(tets->tri.size(), 3);
+    sim_viewer->Vmesh.resize(tets->x.size(), 3);
+    sim_viewer->Nmesh.resize(tets->x.size(), 3);
 
     int k = 0;
     for (auto x : tets->x){
         Vector3 n = get_grad_lerped(x, simLS->LS, scale_w);
-        Vmesh(k, 0) = x[0];
-        Vmesh(k, 1) = x[1];
-        Vmesh(k, 2) = x[2];
-        Nmesh(k, 0) = n[0];
-        Nmesh(k, 1) = n[1];
-        Nmesh(k, 2) = n[2];
+        sim_viewer->Vmesh(k, 0) = x[0];
+        sim_viewer->Vmesh(k, 1) = x[1];
+        sim_viewer->Vmesh(k, 2) = x[2];
+        sim_viewer->Nmesh(k, 0) = n[0];
+        sim_viewer->Nmesh(k, 1) = n[1];
+        sim_viewer->Nmesh(k, 2) = n[2];
         k++;
     }
 
     k = 0;
     for (auto t : tets->tri) {
-        Fmesh(k, 0) = t[2];
-        Fmesh(k, 1) = t[1];
-        Fmesh(k, 2) = t[0];
+        sim_viewer->Fmesh(k, 0) = t[2];
+        sim_viewer->Fmesh(k, 1) = t[1];
+        sim_viewer->Fmesh(k, 2) = t[0];
         k++;
     }
 
-    viewer->data().clear();
-
-    std::unique_lock<std::mutex> lck(viewerMtx);
-    refresh = true;
-    viewerCV.notify_one();
+    if (write_mesh) {
+        sim_viewer->write_mesh_to_ply();
+    }
+    sim_viewer->refresh_viewer();
 }
 
 void SimWater::update_triangle_mesh(){

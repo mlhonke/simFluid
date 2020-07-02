@@ -1,20 +1,16 @@
 #ifndef SIM_WATER_HPP
 #define SIM_WATER_HPP
 
-#include <vector>
-#include <queue>
-
 #include "sim.hpp"
 #include "recorder.h"
 #include "sim_params_water.hpp"
 #include "eigen_types.hpp"
 #include "execTimer.hpp"
 
-class SimPLSCUDA;
-class SimPLS;
 class CudaCG;
 class SimLevelSet;
 class SimLabel;
+class SimViewer;
 namespace marchingtets { class MarchingTets; }
 namespace igl {namespace opengl {namespace glfw { class Viewer; }}}
 
@@ -29,6 +25,7 @@ public:
     void load_data();
     void initialize_fluid(SimLevelSet *level_set);
     SimLevelSet *simLS;
+    bool write_mesh = false;
 
 protected:
     void add_gravity_to_velocity(CubeX &v, scalar_t dt);
@@ -54,9 +51,6 @@ protected:
     void update_viewer_triangle_mesh();
 
     int n_cells_use;
-//    SimLevelSet* simLS;
-//    SimMesh* simLS;
-//    SimLevelSet *simLS;
     marchingtets::MarchingTets* tets;
     VectorXs p;
     CubeX P;
@@ -79,18 +73,13 @@ protected:
     CudaCG* cudacg_water;
     CudaCG* cudacg_vis;
     SimLabel* air_label;
+    SimViewer* sim_viewer;
 
     //Physical constants
     scalar_t const g = -9.8;
     scalar_t const density = 1000.0;
     scalar_t const lambda = 0.2;
     scalar_t const nu = 0.1;
-
-    // Viewer stuff
-    igl::opengl::glfw::Viewer* viewer;
-    Eigen::MatrixXi Fmesh;
-    Eigen::MatrixXd Vmesh;
-    Eigen::MatrixXd Nmesh;
 };
 
 #endif

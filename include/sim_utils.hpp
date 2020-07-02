@@ -20,5 +20,12 @@ bool is_coord_valid(Vector3i I, Vector3i dims);
 Vector3 get_position(int i, int j, int k, scalar_t dx);
 Vector3 get_position(Vector3ui pos, scalar_t dx);
 
+template<typename T, typename R> R slice_y(const T &a){
+    return a.subcube(0, a.n_cols/2, 0, a.n_rows-1, a.n_cols/2, a.n_slices-1);
+}
+
+template<typename T, typename R> R slice_x(const T &a){
+    return a.subcube(a.n_rows/2, 0, 0, a.n_rows/2, a.n_cols-1, a.n_slices-1);
+}
 
 #endif //SIM_UTILS_HPP
