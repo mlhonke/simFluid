@@ -14,16 +14,17 @@
 #include "advect_dev.cuh"
 #include "cuda_errorcheck.hpp"
 #include "sim_utils.hpp"
+#include "fd_math.hpp"
 
 #ifdef USECUDA
 #define VERBOSE_PLS // Enable outputs explaining PLS updates.
 
 SimPLSCUDA::SimPLSCUDA(SimParams &C, SimParams* DEV_C, std::array<scalar_t*, 3> &DEV_V) : SimLevelSet(C, DEV_C, DEV_V) {
     bandwidth = 1.0;
-    reseed_interval = 10;
+    reseed_interval = 5;
     iteration = 1;
-    surface_particles_per_cell = 200;
-    sign_particles_per_cell = 200;
+    surface_particles_per_cell = 100;
+    sign_particles_per_cell = 50;
     ni = grid_w;
     nj = grid_h;
     nk = grid_d;
@@ -76,8 +77,8 @@ void SimPLSCUDA::advance(int cur_step, scalar_t dt) {
 #endif
     int* DEV_sp_keys, *DEV_np_keys, *DEV_pp_keys;
     cuda_check(cudaMalloc(&DEV_sp_keys, n_sp*sizeof(int)));
-    cuda_check(cudaMalloc(&DEV_pp_keys, n_pp*sizeof(int)));
     cuda_check(cudaMalloc(&DEV_np_keys, n_np*sizeof(int)));
+    cuda_check(cudaMalloc(&DEV_pp_keys, n_pp*sizeof(int)));
     calculate_particle_cells_on_device(get_number_of_blocks(n_sp), threads_in_block, n_sp, DEV_sp, DEV_sp_keys, DEV_C);
     calculate_particle_cells_on_device(get_number_of_blocks(n_np), threads_in_block, n_np, DEV_np, DEV_np_keys, DEV_C);
     calculate_particle_cells_on_device(get_number_of_blocks(n_pp), threads_in_block, n_pp, DEV_pp, DEV_pp_keys, DEV_C);
@@ -123,8 +124,8 @@ void SimPLSCUDA::advance(int cur_step, scalar_t dt) {
 //    std::cout << "-LS" << std::endl;
 //    std::cout << LS_neg << std::endl;
     cuda_check(cudaMemcpy(&sp[0], DEV_sp, n_sp*sizeof(CUVEC::Vec3d), cudaMemcpyDeviceToHost));
-    cuda_check(cudaMemcpy(&np[0], DEV_np, n_np*sizeof(CUVEC::Vec3d), cudaMemcpyDeviceToHost));
-    cuda_check(cudaMemcpy(&pp[0], DEV_pp, n_pp*sizeof(CUVEC::Vec3d), cudaMemcpyDeviceToHost));
+//    cuda_check(cudaMemcpy(&np[0], DEV_np, n_np*sizeof(CUVEC::Vec3d), cudaMemcpyDeviceToHost));
+//    cuda_check(cudaMemcpy(&pp[0], DEV_pp, n_pp*sizeof(CUVEC::Vec3d), cudaMemcpyDeviceToHost));
 #ifdef VERBOSE_PLS
     std::cout << "Propagating levelset values from interface." << std::endl;
 #endif
@@ -156,8 +157,6 @@ void SimPLSCUDA::advance(int cur_step, scalar_t dt) {
 
 void SimPLSCUDA::reinit_pls(){
     sp.clear();
-    np.clear();
-    pp.clear();
     free_particles_on_device();
 #ifdef VERBOSE_PLS
     std::cout << "Reinitializing the PLS." << std::endl;
@@ -176,9 +175,13 @@ void SimPLSCUDA::reinit_pls(){
 #ifdef VERBOSE_PLS
     std::cout << "The size of a particle with this vector library " << sizeof(CUVEC::Vec3d) << std::endl;
 #endif
-    cudaMalloc(&DEV_sp, surf_coords.size()*surface_particles_per_cell*sizeof(CUVEC::Vec3d));
-    cudaMalloc(&DEV_np, surf_coords.size()*(sign_particles_per_cell)*sizeof(CUVEC::Vec3d));
-    cudaMalloc(&DEV_pp, surf_coords.size()*(sign_particles_per_cell)*sizeof(CUVEC::Vec3d));
+    n_sp = surf_coords.size()*surface_particles_per_cell;
+    n_np = surf_coords.size()*sign_particles_per_cell;
+    n_pp = surf_coords.size()*sign_particles_per_cell;
+    cudaMalloc(&DEV_sp, n_sp*sizeof(CUVEC::Vec3d));
+    cudaMalloc(&DEV_np, n_np*sizeof(CUVEC::Vec3d));
+    cudaMalloc(&DEV_pp, n_pp*sizeof(CUVEC::Vec3d));
+    sp.resize(n_sp);
     CUVEC::Vec3i *DEV_surf_coords;
     cudaMalloc(&DEV_surf_coords, surf_coords.size()*sizeof(CUVEC::Vec3i));
     cudaMemcpy(DEV_surf_coords, &surf_coords[0], surf_coords.size()*sizeof(CUVEC::Vec3i), cudaMemcpyHostToDevice);
@@ -193,49 +196,13 @@ void SimPLSCUDA::reinit_pls(){
 //    CubeX grad_LS_x = CubeX(grid_w, grid_h, grid_d, arma::fill::zeros);
 //    CubeX grad_LS_y = CubeX(grid_w, grid_h, grid_d, arma::fill::zeros);
 //    CubeX grad_LS_z = CubeX(grid_w, grid_h, grid_d, arma::fill::zeros);
-//    calc_grad(LS, grad_LS_x, grad_LS_y, grad_LS_z, dx); // do this on CPU since grid based operation
+//    calc_grad(LS, grad_LS_x, grad_LS_y, grad_LS_z, dx);
 //    cudaMemcpy(DEV_grad_LS_x, grad_LS_x.memptr(), n_cells*sizeof(scalar_t), cudaMemcpyHostToDevice);
 //    cudaMemcpy(DEV_grad_LS_y, grad_LS_y.memptr(), n_cells*sizeof(scalar_t), cudaMemcpyHostToDevice);
 //    cudaMemcpy(DEV_grad_LS_z, grad_LS_z.memptr(), n_cells*sizeof(scalar_t), cudaMemcpyHostToDevice);
-    reseed_surface_particles_on_device(
-            surf_coords.size(), DEV_surf_coords, DEV_sp, DEV_pp, DEV_np, DEV_LS,
-            DEV_grad_LS_x, DEV_grad_LS_y, DEV_grad_LS_z,
-            surface_particles_per_cell, sign_particles_per_cell, 1.0, DEV_C, threads_in_block
-            );
-    std::vector<CUVEC::Vec3d> all_sp, all_np, all_pp;
-    all_sp.resize(surf_coords.size()*surface_particles_per_cell);
-    all_np.resize(surf_coords.size()*sign_particles_per_cell);
-    all_pp.resize(surf_coords.size()*sign_particles_per_cell);
-    cudaMemcpy(&all_sp[0], DEV_sp, surf_coords.size()*surface_particles_per_cell*sizeof(CUVEC::Vec3d), cudaMemcpyDeviceToHost);
-    cudaMemcpy(&all_np[0], DEV_np, surf_coords.size()*sign_particles_per_cell*sizeof(CUVEC::Vec3d), cudaMemcpyDeviceToHost);
-    cudaMemcpy(&all_pp[0], DEV_pp, surf_coords.size()*sign_particles_per_cell*sizeof(CUVEC::Vec3d), cudaMemcpyDeviceToHost);
-    cudaFree(DEV_sp);
-    cudaFree(DEV_np);
-    cudaFree(DEV_pp);
-    // TODO: This takes some time in profiler, better way to do?
-    for (const auto &p : all_sp){
-        if (p[0] > -800){
-            sp.push_back(p);
-        }
-    }
-    for (const auto &p : all_np){
-        if (p[0] > -800){
-            np.push_back(p);
-        }
-    }
-    for (const auto &p : all_pp){
-        if (p[0] > -800){
-            pp.push_back(p);
-        }
-    }
-#ifdef VERBOSE_PLS
-    std::cout << "Done reseeding particles. Number of particles seeded: " << sp.size() << std::endl;
-    std::cout << "Done reseeding particles. Number of particles positive seeded: " << pp.size() << std::endl;
-    std::cout << "Done reseeding particles. Number of particles negative seeded: " << np.size() << std::endl;
-#endif
-    n_sp = sp.size(); n_pp = pp.size(); n_np = np.size();
-    allocate_space_for_particles_on_device();
-    update_particles_on_device();
+    reseed_surface_particles_on_device(surf_coords.size(), DEV_surf_coords, DEV_sp, DEV_LS, DEV_grad_LS_x, DEV_grad_LS_y, DEV_grad_LS_z, surface_particles_per_cell, 1.0, DEV_C, threads_in_block);
+    reseed_sign_particles_on_device(surf_coords.size(), DEV_sp, DEV_pp, DEV_np, DEV_LS, DEV_grad_LS_x, DEV_grad_LS_y, DEV_grad_LS_z, surface_particles_per_cell, sign_particles_per_cell, 1.0, DEV_C, threads_in_block);
+
     cudaFree(DEV_surf_coords);
 }
 
@@ -294,7 +261,13 @@ void SimPLSCUDA::generate_indicies_for_particles(int* DEV_p_keys, int* &DEV_p_in
     int i = 0;
     int count = 0;
     int counting_key = p_keys[0];
+    int n_stray = 0;
     for (const auto &k : p_keys){
+        if (k < 0){
+            n_stray++;
+            i++;
+            continue;
+        }
         if (k != last) {
             p_index[k] = i;
             p_count[counting_key] = count;
@@ -305,6 +278,7 @@ void SimPLSCUDA::generate_indicies_for_particles(int* DEV_p_keys, int* &DEV_p_in
         i++;
         last = k;
     }
+    std::cout << "Number of stray particles " << n_stray << std::endl;
     p_count[counting_key] = count;
     p_keys.clear();
     cudaFree(DEV_p_keys);

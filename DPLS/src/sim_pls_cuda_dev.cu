@@ -8,11 +8,15 @@
 #include "sim_pls_cuda_dev.cuh"
 #include "cuda_errorcheck.hpp"
 
+__device__ int cusgn(scalar_t val) {
+    return (val > 0) - (val < 0);
+}
+
 __global__ void
 advect_particles_3D(int n_particles, scalar_t dt, CUVEC::Vec3d *p, scalar_t *vx, scalar_t *vy, scalar_t *vz, SimParams *C) {
-    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
 
-    if (i < n_particles) { // Will cause some thread divergence in the last warp.
+    if (i < n_particles && p[i][0] > -800) { // Will cause some thread divergence in the last warp.
         CUVEC::Vec3d vel_start = cu_vel_trilerp(p[i], vx, vy, vz, *C);
         CUVEC::Vec3d pos_mid = p[i] + 0.5 * dt * vel_start;
         CUVEC::Vec3d vel_mid = cu_vel_trilerp(pos_mid, vx, vy, vz, *C);
@@ -85,6 +89,7 @@ get_normal(const CUVEC::Vec3d &pos, scalar_t *LS, scalar_t *LS_grad_x, scalar_t 
         CUVEC::normalize(grad);
         return grad;
     } else {
+        printf("Warning: get_normal failed.\n");
         return {0, 0, 0};
     }
 }
@@ -94,9 +99,9 @@ get_surface_point(const CUVEC::Vec3d &pos, CUVEC::Vec3d &result, scalar_t *LS, s
                   scalar_t *LS_grad_z, SimParams &C) {
     CUVEC::Vec3d search_pt = pos;
     bool clamp = false;
-//    scalar_t dist = cu_grid_tricerp(search_pt, LS, clamp, C);
-    scalar_t dist = cu_grid_trilerp(search_pt, LS, C);
-    scalar_t tol = 1E-12;
+    scalar_t dist = cu_grid_tricerp(search_pt, LS, clamp, C);
+//    scalar_t dist = cu_grid_trilerp(search_pt, LS, C);
+    scalar_t tol = 1E-4;
     int iters = 0;
     while (fabs(dist) > tol * C.dx && iters < 300) {
         CUVEC::Vec3d normal = get_normal(search_pt, LS, LS_grad_x, LS_grad_y, LS_grad_z, C);
@@ -107,6 +112,10 @@ get_surface_point(const CUVEC::Vec3d &pos, CUVEC::Vec3d &result, scalar_t *LS, s
     }
     result = search_pt;
     bool valid = fabs(dist) <= tol * C.dx;
+//    if (!valid){
+//        printf("Distance from interface when particle at position %f %f %f which failed to seed: %.14e with tolerance: %e\n",
+//                pos[0], pos[1], pos[2], dist, tol * C.dx);
+//    }
     return valid;
 }
 
@@ -123,31 +132,62 @@ __device__ inline float randhashf(unsigned int seed, float a, float b) {
     return ((b - a) * randhash(seed) / (float) UINT_MAX + a);
 }
 
-__constant__ scalar_t dir[2] = {-1, 1}; // avoid thread divergence
-__global__ void reseed_particles_surface(int n_cells,
-                                         CUVEC::Vec3i *coords,
-                                         CUVEC::Vec3d *sp,
-                                         CUVEC::Vec3d *pp,
-                                         CUVEC::Vec3d *np,
-                                         scalar_t *LS,
-                                         scalar_t *LS_grad_x,
-                                         scalar_t *LS_grad_y,
-                                         scalar_t *LS_grad_z,
-                                         int sp_per_cell,
-                                         int sign_per_cell,
-                                         scalar_t bandwidth,
-                                         SimParams *C
-                                        ) {
-    (void) sign_per_cell; // Not used because we assign a signed particle with a surface particle each time.
-    unsigned int id = blockIdx.x * blockDim.x + threadIdx.x;
-    unsigned int cell_id = id / sp_per_cell;
+__constant__ scalar_t dir[2] = {1, -1}; // avoid thread divergence
+__global__ void reseed_particles_sign(int n_cells, CUVEC::Vec3d *sp, CUVEC::Vec3d *pp, CUVEC::Vec3d *np, scalar_t *LS, scalar_t *LS_grad_x, scalar_t *LS_grad_y, scalar_t *LS_grad_z, int sp_per_cell, int sign_per_cell, scalar_t bandwidth,SimParams *C
+) {
+    unsigned int p_id = blockIdx.x * blockDim.x + threadIdx.x;
+    unsigned int cell_id = p_id / sign_per_cell;
+    unsigned int p_id_cell = p_id - cell_id*sign_per_cell;
+    unsigned int p_surf_id = p_id_cell + cell_id*sp_per_cell;
+
+    if (cell_id < n_cells) {
+        CUVEC::Vec3d surf = sp[p_surf_id];
+        if (surf[0] > -800) {
+            scalar_t offset = 0.25 * C->dx;
+            CUVEC::Vec3d normal = get_normal(surf, LS, LS_grad_x, LS_grad_y, LS_grad_z, *C);
+            CUVEC::Vec3d p0 = surf + dir[0] * offset * normal; // positive LS value
+            CUVEC::Vec3d p1 = surf + dir[1] * offset * normal; // negative LS value
+
+            unsigned int iter = 0;
+            const unsigned int max_iter = 10; // 10 iterations is 1/1000th of the original offset!
+            while (cu_grid_tricerp(p1, LS, false, *C) > 0 || cu_grid_tricerp(p0, LS, false, *C) < 0){
+                offset *= 0.5;
+                p0 = surf + dir[0] * offset * normal;
+                p1 = surf + dir[1] * offset * normal;
+                iter++;
+                if (iter > max_iter){
+//                    printf("Failed to seed signed particle pair.\n");
+                    pp[p_id] = CUVEC::Vec3d(-1000, -1000, -1000);
+                    np[p_id] = CUVEC::Vec3d(-1000, -1000, -1000);
+                    break;
+                }
+            }
+
+            pp[p_id] = p0;
+            np[p_id] = p1;
+        } else {
+            np[p_id] = CUVEC::Vec3d(-1000, -1000, -1000);
+            pp[p_id] = CUVEC::Vec3d(-1000, -1000, -1000);
+        }
+    }
+}
+
+__host__ void reseed_sign_particles_on_device(int n_cells, CUVEC::Vec3d *sp, CUVEC::Vec3d *pp, CUVEC::Vec3d *np, scalar_t *LS, scalar_t *LS_grad_x, scalar_t *LS_grad_y, scalar_t *LS_grad_z, int sp_per_cell, int sign_per_cell, scalar_t bandwidth, SimParams *C, int threads_in_block) {
+    int n_blocks = (n_cells*sp_per_cell)/threads_in_block + 1;
+    reseed_particles_sign <<< n_blocks, threads_in_block >>> (n_cells, sp, pp, np, LS, LS_grad_x, LS_grad_y, LS_grad_z,
+             sp_per_cell, sign_per_cell, bandwidth, C);
+}
+
+__global__ void reseed_particles_surface(int n_cells, CUVEC::Vec3i *coords, CUVEC::Vec3d *sp, scalar_t *LS, scalar_t *LS_grad_x, scalar_t *LS_grad_y, scalar_t *LS_grad_z, int sp_per_cell, scalar_t bandwidth, SimParams *C) {
+    unsigned int p_id = blockIdx.x * blockDim.x + threadIdx.x;
+    unsigned int cell_id = p_id / sp_per_cell;
 
     if (cell_id < n_cells) {
         unsigned int i = coords[cell_id][0];
         unsigned int j = coords[cell_id][1];
         unsigned int k = coords[cell_id][2];
 
-        unsigned int seed = 3 * id;
+        unsigned int seed = 3 * p_id;
         CUVEC::Vec3d start(i * C->dx, j * C->dx, k * C->dx);
         scalar_t x_off = C->dx * randhashf(seed++, 0, 1) - 0.5 * C->dx;
         scalar_t y_off = C->dx * randhashf(seed++, 0, 1) - 0.5 * C->dx;
@@ -157,16 +197,7 @@ __global__ void reseed_particles_surface(int n_cells,
         CUVEC::Vec3d min_coord(0, 0, 0);
         CUVEC::Vec3d max_coord(C->sim_w, C->sim_h, C->sim_d);
         newpt = CUVEC::clamp(newpt, min_coord, max_coord);
-//    scalar_t LS_val = cu_grid_trilerp(newpt, LS, *C);
-        unsigned int p_id = id;
-//    if (fabs(LS_val) < 2.0*bandwidth * C->dx) {
-//        if (LS_val > 0) {
-//            pp[p_id] = newpt;
-//            np[p_id] = CUVEC::Vec3d(-1000, -1000, -1000);
-//        } else {
-//            np[p_id] = newpt;
-//            pp[p_id] = CUVEC::Vec3d(-1000, -1000, -1000);
-//        }
+
         CUVEC::Vec3d surf;
         bool success = get_surface_point(newpt, surf, LS, LS_grad_x, LS_grad_y, LS_grad_z, *C);
 //        if (success && (surf[0] < 0 || surf[1] < 0 || surf[2] < 0)){
@@ -177,59 +208,21 @@ __global__ void reseed_particles_surface(int n_cells,
 //            surf[1] = fmax(fmin(surf[1], C->sim_h), 0);
 //            surf[2] = fmax(fmin(surf[2], C->sim_d), 0);
             sp[p_id] = surf;
-            // half of signed particles in each direction
-            CUVEC::Vec3d p0 =
-                    surf + dir[p_id % 2] * 0.25 * C->dx * get_normal(surf, LS, LS_grad_x, LS_grad_y, LS_grad_z, *C);
-//            CUVEC::Vec3d p1 = surf - 0.25*C->dx*get_normal(surf, LS, LS_grad_x, LS_grad_y, LS_grad_z, *C);
-            np[p_id] = CUVEC::Vec3d(-1000, -1000, -1000);
-            pp[p_id] = CUVEC::Vec3d(-1000, -1000, -1000);
-            if (cu_grid_trilerp(p0, LS, *C) > 0) {
-                pp[p_id] = p0;
-            } else {
-                np[p_id] = p0;
-            }
-
-//            if ( cu_grid_trilerp(p1, LS, *C) > 0 ){
-//                pp[p_id] = p1;
-//            } else {
-//                np[p_id] = p1;
-//            }
         } else {
 //            printf("Failed to seed a valid start position!\n");
             sp[p_id] = CUVEC::Vec3d(-1000, -1000, -1000);
-            np[p_id] = CUVEC::Vec3d(-1000, -1000, -1000);
-            pp[p_id] = CUVEC::Vec3d(-1000, -1000, -1000);
         }
-//    } else {
-//        sp[p_id] = CUVEC::Vec3d(-1000, -1000, -1000);
-//        pp[p_id] = CUVEC::Vec3d(-1000, -1000, -1000);
-//        np[p_id] = CUVEC::Vec3d(-1000, -1000, -1000);
-//    }
     }
 }
 
-__host__ void reseed_surface_particles_on_device(int n_cells,
-                                                 CUVEC::Vec3i *coords,
-                                                 CUVEC::Vec3d *sp,
-                                                 CUVEC::Vec3d *pp,
-                                                 CUVEC::Vec3d *np,
-                                                 scalar_t *LS,
-                                                 scalar_t *LS_grad_x,
-                                                 scalar_t *LS_grad_y,
-                                                 scalar_t *LS_grad_z,
-                                                 int sp_per_cell,
-                                                 int sign_per_cell,
-                                                 scalar_t bandwidth,
-                                                 SimParams *C,
-                                                 int threads_in_block) {
+__host__ void reseed_surface_particles_on_device(int n_cells, CUVEC::Vec3i *coords, CUVEC::Vec3d *sp, scalar_t *LS, scalar_t *LS_grad_x, scalar_t *LS_grad_y, scalar_t *LS_grad_z, int sp_per_cell, scalar_t bandwidth, SimParams *C, int threads_in_block) {
     int n_blocks = (n_cells*sp_per_cell)/threads_in_block + 1;
-    reseed_particles_surface <<< n_blocks, threads_in_block >>>
-                                           (n_cells, coords, sp, pp, np, LS, LS_grad_x, LS_grad_y, LS_grad_z,
-                                                   sp_per_cell, sign_per_cell, bandwidth, C);
+    reseed_particles_surface <<< n_blocks, threads_in_block >>> (n_cells, coords, sp, LS, LS_grad_x, LS_grad_y,
+            LS_grad_z, sp_per_cell, bandwidth, C);
 }
 
 __global__ void calculate_particle_cells(int n_p, CUVEC::Vec3d *p, int *cell_ids, SimParams *C) {
-    int id = blockIdx.x * blockDim.x + threadIdx.x;
+    unsigned int id = blockIdx.x * blockDim.x + threadIdx.x;
 
     if (id < n_p) {
         int i = lrint(p[id][0] / C->dx);
@@ -239,10 +232,17 @@ __global__ void calculate_particle_cells(int n_p, CUVEC::Vec3d *p, int *cell_ids
 //        if (i < 0 || j < 0) {
 //            printf("%d, %d, %d, %f, %f, %f\n", i, j, k, p[id][0], p[id][1], p[id][2]);
 //        }
-        i = max(min(i, C->grid_w-2), 1);
-        j = max(min(j, C->grid_h-2), 1);
-        k = max(min(k, C->grid_d-2), 1);
-        int cell_id = ccti(i, j, k, C->grid_w, C->grid_h);
+
+        int cell_id;
+        if (i > C->grid_w - 1 || i < 0 || j > C->grid_h - 1 || j < 0 || k > C->grid_d - 1 || k < 0){
+//            printf("%d, %d, %d, %f, %f, %f\n", i, j, k, p[id][0], p[id][1], p[id][2]);
+            cell_id = -1;
+        } else {
+//            i = max(min(i, C->grid_w-2), 1);
+//            j = max(min(j, C->grid_h-2), 1);
+//            k = max(min(k, C->grid_d-2), 1);
+            cell_id = ccti(i, j, k, C->grid_w, C->grid_h);
+        }
 
 //        printf("%d \n", cell_id);
         cell_ids[id] = cell_id;
@@ -286,10 +286,6 @@ __device__ void do_grid_redistance_now(scalar_t * LS, CUVEC::Vec3d * p, int * co
         *LS = dist;
         *cp = candidate_cp + p_id;
     }
-}
-
-__device__ int cusgn(scalar_t val) {
-    return (val > 0) - (val < 0);
 }
 
 // TODO: Improve performance by using the levelset to determine if its worth even looking for a particle nearby.

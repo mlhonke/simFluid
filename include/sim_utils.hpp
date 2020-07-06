@@ -28,4 +28,44 @@ template<typename T, typename R> R slice_x(const T &a){
     return a.subcube(a.n_rows/2, 0, 0, a.n_rows/2, a.n_cols-1, a.n_slices-1);
 }
 
+class coordIterator{
+public:
+    coordIterator(const Vector3i &min_in, const Vector3i &max_in):min(min_in){
+        max = max_in - min_in + 1;
+        d_max = max[0]*max[1]*max[2];
+        i = min_in(0); j = min_in(1); k = min_in(2);
+    }
+    coordIterator& operator++() {
+        i = d % max[0] + min[0];
+        j = (d / max[0]) % max[1] + min[1];
+        k = d / (max[0] * max[1]) + min[2];
+        d++;
+        return *this;
+    }
+
+    bool next(){
+        this->operator++();
+        return !is_done();
+    }
+
+    Vector3i operator*() {return {i,j,k};}
+
+    bool is_done() const {
+        return d > d_max;
+    }
+
+    std::string get_string() const{
+        std::string out;
+        out = "{" + std::to_string(i) + ", " + std::to_string(j) + ", " + std::to_string(k) + "}";
+        return out;
+    }
+
+    Vector3i current;
+    int i, j, k;
+private:
+    Vector3i max, min;
+    int d = 0;
+    int d_max = 0;
+};
+
 #endif //SIM_UTILS_HPP

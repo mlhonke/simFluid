@@ -13,10 +13,10 @@ void get_file_name(char* filename, int max_filename, const char* prefix, int fra
 }
 
 bool save_screen(igl::opengl::glfw::Viewer &v, int frame_id){
-    Eigen::Matrix<unsigned char,Eigen::Dynamic,Eigen::Dynamic> R(1000,1000);
-    Eigen::Matrix<unsigned char,Eigen::Dynamic,Eigen::Dynamic> G(1000,1000);
-    Eigen::Matrix<unsigned char,Eigen::Dynamic,Eigen::Dynamic> B(1000,1000);
-    Eigen::Matrix<unsigned char,Eigen::Dynamic,Eigen::Dynamic> T(1000,1000);
+    Eigen::Matrix<unsigned char,Eigen::Dynamic,Eigen::Dynamic> R(500,500);
+    Eigen::Matrix<unsigned char,Eigen::Dynamic,Eigen::Dynamic> G(500,500);
+    Eigen::Matrix<unsigned char,Eigen::Dynamic,Eigen::Dynamic> B(500,500);
+    Eigen::Matrix<unsigned char,Eigen::Dynamic,Eigen::Dynamic> T(500,500);
     v.core().draw_buffer(v.data(),false,R,G,B,T);
 
     //Setup filename
@@ -55,7 +55,7 @@ void run_viewer(SimViewer &viewer){
     // Set Viewer to tight draw loop
     viewer.getViewer()->core().is_animating = true;
     // Launch viewer in this thread
-    viewer.getViewer()->launch(false, false, "Simulation Render", 1000, 1000);
+    viewer.getViewer()->launch(false, false, "Simulation Render", 500, 500);
 }
 
 SimViewer::SimViewer(SimParams &C):C(C) {

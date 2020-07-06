@@ -109,14 +109,18 @@ void SimWater::step(){
 
     extrapolate_velocities_from_LS();
     update_velocities_on_device();
+
+    ExecTimer timer("Advance time");
     simLS->advance(cur_step, dt);
+    timer.~ExecTimer();
+
     update_labels_from_level_set();
     advect_velocity();
     add_gravity_to_velocity(V[2], dt);
     std::cout << "Solving viscosity." << std::endl;
     solve_viscosity();
     std::cout << "Solving pressure." << std::endl;
-    solve_pressure(fluid_label, true, true, false);
+    solve_pressure(fluid_label, true, false, false);
 
 //    CubeX divs = CubeX(grid_w, grid_h, grid_d, arma::fill::zeros);
 //    check_divergence(divs);
@@ -135,9 +139,9 @@ void SimWater::add_gravity_to_velocity(CubeX &v, scalar_t dt){
     for (unsigned int k = 0; k < v.n_slices; k++) {
         for (unsigned int j = 0; j < v.n_cols; j++) {
             for (unsigned int i = 0; i < v.n_rows; i++) {
-                if (fluid_label->get_label_center(i, j, k) == 1 || fluid_label->get_label_center(i, j, k-1) == 1) {
+               // if (fluid_label->get_label_center(i, j, k) == 1 || fluid_label->get_label_center(i, j, k-1) == 1) {
                     v(i, j, k) += g * dt;
-                }
+               // }
             }
         }
     }
@@ -150,7 +154,7 @@ void SimWater::extrapolate_velocities_from_LS() {
     extrapolate_velocity_from_LS(V[1], {0, -1, 0});
     extrapolate_velocity_from_LS(V[2], {0, 0, -1});
 
-    bool do_pressure_extrap = false;
+    bool do_pressure_extrap = true;
     if (do_pressure_extrap) {
         V_solid[0] = V[0];
         V_solid[1] = V[1];
