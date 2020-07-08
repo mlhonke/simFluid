@@ -28,6 +28,11 @@ template<typename T, typename R> R slice_x(const T &a){
     return a.subcube(a.n_rows/2, 0, 0, a.n_rows/2, a.n_cols-1, a.n_slices-1);
 }
 
+/* coordIterator:
+ * An experiment in avoiding triple nested loops.
+ * TODO: Test performance of using this iterator versus using a triple nested loop.
+ * Potentially useful, along with templates, to allow this simulation to easily switch between 2D and 3D modes.
+ */
 class coordIterator{
 public:
     coordIterator(const Vector3i &min_in, const Vector3i &max_in):min(min_in){

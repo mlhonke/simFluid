@@ -2,9 +2,10 @@
 // Created by graphics on 2020-06-23.
 //
 
-#include <thread>
-
 #include "sim_viewer.hpp"
+#include "mesh_output.hpp"
+
+#include <thread>
 #include <igl/opengl/glfw/Viewer.h>
 #include <igl/png/writePNG.h>
 
@@ -106,24 +107,5 @@ void SimViewer::write_mesh_to_ply() {
     char const *type = "ply";
     get_file_name(filename, max_filename, prefix, frame_id, type);
 
-    std::ofstream mesh_file;
-    mesh_file.open(filename);
-    mesh_file << "ply\nformat ascii 1.0" << std::endl;
-    mesh_file << "element vertex " << Vmesh.rows() << std::endl;
-    mesh_file << "property float x\nproperty float y\nproperty float z" << std::endl;
-    mesh_file << "property float nx\nproperty float ny\nproperty float nz" << std::endl;
-    mesh_file << "element face " << Fmesh.rows() << std::endl;
-    mesh_file << "property list uchar int vertex_indices" << std::endl;
-    mesh_file << "end_header" << std::endl;
-
-    for (int i = 0; i < Vmesh.rows(); i++){
-        mesh_file << Vmesh(i,0) << " " << Vmesh(i,1) << " " << Vmesh(i,2) << " ";
-        mesh_file << Nmesh(i,0) << " " << Nmesh(i,1) << " " << Nmesh(i,2) << std::endl;
-    }
-
-    for (int i = 0; i < Fmesh.rows(); i++){
-        mesh_file << "3 " << Fmesh(i,0) << " " << Fmesh(i,1) << " " << Fmesh(i,2) << std::endl;
-    }
-
-    mesh_file.close();
+    export_ply_mesh(filename, Vmesh, Nmesh, Fmesh);
 }

@@ -54,7 +54,6 @@ void SimWater::initialize_fluid(SimLevelSet *level_set){
     update_triangle_mesh();
     update_viewer_triangle_mesh();
     volume_old = -calc_mesh_volume(tets->x, tets->tri);
-//    run_water_unit_tests();
     int n_cells_occupied = fluid_label->get_cell_count(1); // Find number of fluid cells currently.
     n_cells_use = 7*n_cells_occupied; //Upper bound.
     cudacg_water = new CudaCG(n_cells_occupied, n_cells_use);

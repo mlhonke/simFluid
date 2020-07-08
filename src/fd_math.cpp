@@ -60,6 +60,7 @@ void calc_grad(const CubeX& P, CubeX& Gx, CubeX& Gy, CubeX& Gz, scalar_t dx){
     }
 }
 
+//TODO: Use array<scalar_t, 6> since length is known. (Likely no performance improvement since vectors probably preallocate enough memory?).
 std::vector<scalar_t> get_neighbours_lerped(const Vector3 &pos, const CubeX& Q, scalar_t dx){
     std::vector<scalar_t> sides;
 

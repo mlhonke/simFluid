@@ -73,7 +73,7 @@ args = paramListToArgs(paramList)
 
 print(args)
 
-os.system("./freefall" + args)
+os.system("./stairs" + args)
 os.chdir("../screens")
 videoName = tName
 os.system("ffmpeg -i screen_%07d.png -c:v libx264 " + videoName + ".mp4")

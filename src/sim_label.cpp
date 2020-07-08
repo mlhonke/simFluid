@@ -2,9 +2,14 @@
 // Created by graphics on 24/09/19.
 //
 
-#include "sim_label.hpp"
 #include <cuda_runtime.h>
+#include <unordered_map>
+
 #include "cuda_errorcheck.hpp"
+#include "sim_label.hpp"
+#include "advect_dev.cuh"
+#include "sim_utils.hpp"
+#include "mesh_output.hpp"
 
 SimLabel::SimLabel(Sim& sim, bool init_colours):sim(sim), grid_w(sim.grid_w), grid_h(sim.grid_h), grid_d(sim.grid_d), dx(sim.scale_w){
     label = CubeXi(grid_w+2, grid_h+2, grid_d+2, arma::fill::zeros);
@@ -171,4 +176,80 @@ void SimLabel::save_data(std::string filename){
 void SimLabel::load_data(std::string filename){
     label.load(filename);
     update_label_on_device();
+}
+
+
+
+void SimLabel::triangulate_grid(CubeXi &label, Vector3ui offset, FLUID_TYPES sel_label, std::string filename, SimParams &C) {
+    std::vector<Vector3> V;
+    std::vector<Vector3i> F;
+    Vector3i dims = { (int) label.n_rows, (int) label.n_cols, (int) label.n_slices};
+    CubeXi V_indicies = CubeXi(dims[0] + 1, dims[1] + 1, dims[2] + 1); // need to find previously created vertices of adjacent faces
+    V_indicies.fill(-1);
+
+    auto checkset_V_index = [&V_indicies, &V, &offset, &C](Vector3ui &coord){
+        int V_index = V_indicies(coord(0), coord(1), coord(2));
+        if (V_index == -1){
+            V.push_back(get_position(coord + offset, C.dx));
+            int index = V.size() - 1;
+            V_indicies(coord(0), coord(1), coord(2)) = index;
+            return index;
+        } else {
+            return V_index;
+        }
+    };
+
+    for (unsigned int k = 0; k < label.n_slices; k++) {
+        for (unsigned int j = 0; j < label.n_cols; j++) {
+            for (unsigned int i = 0; i < label.n_rows; i++) {
+                int cur_label = label(i,j,k);
+                if (cur_label == sel_label) {
+                    Vector3ui coord = {i, j, k};
+                    Vector3i dir = {0, 0, 0};
+
+                    // Look in each direction to see if we need to create a face.
+                    for (int f = 0; f < 6; f++) {
+                        dir.zeros();
+                        int plane_index = f % 3; // The plane (either i, j, or k-plane) of the tentative face.
+                        dir[plane_index] = 1 - 2 * (f / 3);
+                        Vector3i adj = coord + dir;
+                        int adj_label;
+
+                        if (!is_coord_valid(adj, dims)) { // if not valid we want to "wall in" the mesh.
+                            adj_label = sel_label+1; // Make different so that we build a face.
+                        } else {
+                            adj_label = label(adj[0], adj[1], adj[2]);
+                        }
+
+                        if (adj_label != sel_label){
+                            Vector3ui corner_coord[4];
+                            corner_coord[0] = coord; // the corner vertex of this cell.
+                            if (dir(plane_index) > 0){ // if looking in positive direction, need to make face in plane one over
+                                corner_coord[0](plane_index) += dir(plane_index);
+                            }
+
+                            corner_coord[1] = corner_coord[0];
+                            corner_coord[1]((plane_index + 1) % 3) += 1;
+
+                            corner_coord[2] = corner_coord[0];
+                            corner_coord[2]((plane_index + 2) % 3) += 1;
+
+                            corner_coord[3] = corner_coord[1];
+                            corner_coord[3]((plane_index + 2) % 3) += 1;
+
+                            F.push_back({checkset_V_index(corner_coord[0]),
+                                         checkset_V_index(corner_coord[2]),
+                                         checkset_V_index(corner_coord[1])});
+
+                            F.push_back({checkset_V_index(corner_coord[3]),
+                                         checkset_V_index(corner_coord[1]),
+                                         checkset_V_index(corner_coord[2])});
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    export_ply_mesh(filename.c_str(), V, F);
 }

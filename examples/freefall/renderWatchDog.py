@@ -4,8 +4,8 @@ from time import sleep
 import os
 import signal
 
-render_time = 1
-mesh_id = 0
+render_time = 10
+mesh_id = 0 
 mesh_directory = "screens/" # Where are the mesh files located to render?
 output_dir = "renders/" # Where to save rendering related files and frames.
 
@@ -16,7 +16,7 @@ def makeVideoFromFrames():
 while True:
     fluid_mesh = mesh_directory + "mesh_%07d.ply" % mesh_id
     
-    if Path(fluid_mesh).is_file() is not True: # max number for testing
+    if Path(fluid_mesh).is_file() is not True or mesh_id > 1000: # max number for testing
         print("Mesh file " + fluid_mesh + " not found. Rendering finished")
         break
     
