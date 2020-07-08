@@ -52,6 +52,10 @@ Vector3 get_position(int i, int j, int k, scalar_t dx){
     return {i*dx, j*dx, k*dx};
 }
 
+Vector3 get_position(Vector3i pos, scalar_t dx){
+    return {pos(0)*dx, pos(1)*dx, pos(2)*dx};
+}
+
 Vector3 get_position(Vector3ui pos, scalar_t dx){
     return {pos(0)*dx, pos(1)*dx, pos(2)*dx};
 }

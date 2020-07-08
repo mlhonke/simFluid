@@ -18,8 +18,8 @@ def build_scene(fluid_mesh):
 
     props.SetFromString("""
         scene.camera.type = "perspective"
-        scene.camera.lookat.orig = -0.4 0.5 2.5
-        scene.camera.lookat.target = 0.5 0.5 0.0
+        scene.camera.lookat.orig = 0.5 -2.0 1.0
+        scene.camera.lookat.target = 0.5 0.5 0.4
         scene.camera.fieldofview = 35
         ################################################################################
         scene.materials.fluid.type = glass
@@ -54,7 +54,7 @@ def build_scene(fluid_mesh):
         
         scene.lights.l2.type = point
         scene.lights.l2.position = 0.5 0.5 1.0
-        scene.lights.l2.gain = 1.0 1.0 1.0
+        scene.lights.l2.gain = 0.7 0.7 0.7
         
         scene.lights.l3.type = point
         scene.lights.l3.position = 0.0 0.5 2.0
@@ -62,8 +62,12 @@ def build_scene(fluid_mesh):
         ################################################################################
         scene.objects.slab.material = slab
         scene.objects.slab.ply = slab.ply
-        scene.objects.container.material = container
-        scene.objects.container.ply = container_tri.ply
+        #scene.objects.container.material = container
+        #scene.objects.container.ply = container_tri.ply
+        #scene.objects.stairs.material = container
+        #scene.objects.stairs.ply = stairs.ply
+        scene.objects.solid.material = container
+        scene.objects.solid.ply = solid.ply
         ################################################################################
         """)
     scene.Parse(props)

@@ -18,7 +18,9 @@ void free_mac_velocities_on_device(DEV_macVel &DEV_V);
 Vector3ui convert_index_to_coords(unsigned int d, unsigned int rows, unsigned int cols);
 bool is_coord_valid(Vector3i I, Vector3i dims);
 Vector3 get_position(int i, int j, int k, scalar_t dx);
+// TODO: Enforcing unsigned int vector for pos not really necessary. Function can return a negative position. Let caller decide what to do with that.
 Vector3 get_position(Vector3ui pos, scalar_t dx);
+Vector3 get_position(Vector3i pos, scalar_t dx);
 
 template<typename T, typename R> R slice_y(const T &a){
     return a.subcube(0, a.n_cols/2, 0, a.n_rows-1, a.n_cols/2, a.n_slices-1);

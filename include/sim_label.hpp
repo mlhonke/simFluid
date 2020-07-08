@@ -34,7 +34,7 @@ public:
     std::vector<bool> has_air; // confusing nomenclature since we're treating air as a fluid.
     std::vector<Vector3i> centers;
 
-    static void triangulate_grid(CubeXi &label, Vector3ui offset, FLUID_TYPES type, std::string filename, SimParams &C);
+    static void triangulate_grid(CubeXi &label, Vector3i offset, FLUID_TYPES type, std::string filename, SimParams &C);
 
 private:
     bool use_colours = false;

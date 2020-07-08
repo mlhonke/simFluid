@@ -7,7 +7,7 @@ os.chdir("cmake-build-debug")
 # Trial Params
 n_steps = 1000000
 
-res = 30
+res = 60
 # SimParams
 grid_w = res
 grid_h = res

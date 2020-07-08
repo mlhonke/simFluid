@@ -153,7 +153,7 @@ void SimWater::extrapolate_velocities_from_LS() {
     extrapolate_velocity_from_LS(V[1], {0, -1, 0});
     extrapolate_velocity_from_LS(V[2], {0, 0, -1});
 
-    bool do_pressure_extrap = true;
+    bool do_pressure_extrap = false;
     if (do_pressure_extrap) {
         V_solid[0] = V[0];
         V_solid[1] = V[1];

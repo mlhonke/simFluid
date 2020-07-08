@@ -180,7 +180,7 @@ void SimLabel::load_data(std::string filename){
 
 
 
-void SimLabel::triangulate_grid(CubeXi &label, Vector3ui offset, FLUID_TYPES sel_label, std::string filename, SimParams &C) {
+void SimLabel::triangulate_grid(CubeXi &label, Vector3i offset, FLUID_TYPES sel_label, std::string filename, SimParams &C) {
     std::vector<Vector3> V;
     std::vector<Vector3i> F;
     Vector3i dims = { (int) label.n_rows, (int) label.n_cols, (int) label.n_slices};
