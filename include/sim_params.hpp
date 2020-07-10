@@ -20,8 +20,7 @@ typedef struct SimParams {
     scalar_t const max_dt = 0.1;
     scalar_t const render_dt = 0.1;
 
-    // Calculated
-    scalar_t const sim_w = dx*(grid_w-1);
+    /* Calculated*/ scalar_t const sim_w = dx*(grid_w-1);
     scalar_t const sim_h = dx*(grid_h-1);
     scalar_t const sim_d = dx*(grid_d-1);
     int const n_cells = grid_w*grid_h*grid_d;

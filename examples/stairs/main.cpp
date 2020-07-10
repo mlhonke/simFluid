@@ -30,6 +30,7 @@ int main(int argc, char** argv){
 
     // Choose a surface tracking method and make an initial surface.
     auto level_set = new SimPLSCUDA(*params, sim.DEV_C, sim.DEV_V);
+    level_set->reseed_interval = 1;
     Vector3 corner = {1, 1, params->grid_d/2.0+1};
     std::cout << corner << std::endl;
     Vector3 corner_2 = {params->grid_w/4.0, params->grid_h-1.0, params->grid_h-2.0};

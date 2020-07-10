@@ -92,6 +92,7 @@ void SimWater::load_data(){
 }
 
 void SimWater::step(){
+    ExecTimerSteps timer("Simulation time");
     if (cur_step % 10 == 0){
 //        save_data();
     }
@@ -103,34 +104,36 @@ void SimWater::step(){
         render_time += render_dt;
         do_render = true;
     }
-
     std::cout << "Time Step = " << dt << " Time I" << cur_step << " Total elapsed: " << elapsed_time << " Render Step: " << do_render << std::endl;
+    timer.next("Completed time step size calculation");
 
     extrapolate_velocities_from_LS();
+    timer.next("Extrapolate velocities");
     update_velocities_on_device();
+    timer.next("Send velocities to device");
 
-    ExecTimer timer("Advance time");
     simLS->advance(cur_step, dt);
-    timer.~ExecTimer();
+    timer.next("Advance level set");
 
     update_labels_from_level_set();
+    timer.next("Updating simulation labels");
     advect_velocity();
+    timer.next("Advecting velocity");
     add_gravity_to_velocity(V[2], dt);
+    timer.next("Add gravity to velocity");
     std::cout << "Solving viscosity." << std::endl;
     solve_viscosity();
+    timer.next("Solving viscosity");
     std::cout << "Solving pressure." << std::endl;
     solve_pressure(fluid_label, true, false, false);
-
-//    CubeX divs = CubeX(grid_w, grid_h, grid_d, arma::fill::zeros);
-//    check_divergence(divs);
-//    std::cout << "Divergence of velocity field after main pressure solve." << std::endl;
-//    std::cout << divs << std::endl;
+    timer.next("Solving pressure");
 
     cur_step++;
     if (do_render) {
         update_triangle_mesh();
         update_viewer_triangle_mesh();
         do_render = false;
+        timer.next("Rendering screen");
     }
 }
 
@@ -233,7 +236,7 @@ void SimWater::solve_pressure(const SimLabel *labels_in, bool do_tension, bool d
     scalar_t volume_delta = 0;
     scalar_t volume = 0;
     scalar_t c = 0;
-//    ExecTimer *execTimer = new ExecTimer("Solve pressure preprocess");
+
     if (do_vol_correct) {
         update_triangle_mesh();
         volume = -calc_mesh_volume(tets->x, tets->tri);
@@ -251,18 +254,12 @@ void SimWater::solve_pressure(const SimLabel *labels_in, bool do_tension, bool d
     p.fill(0);
     A.reserve(Eigen::VectorXi::Constant(grid_w*grid_h*grid_d, 7)); // 6 faces, and center
     Ad.reserve(Eigen::VectorXi::Constant(grid_w*grid_h*grid_d, 1));
-//    delete execTimer;
 
-//    execTimer = new ExecTimer("Build pressure A and B");
-//    std::cout << "Adjust divergence with: " << c << std::endl;
     build_A_and_b(A, b, dt, simLS->LS, c, labels_in, do_tension, check_air);
-
     A.makeCompressed();
     Ad.makeCompressed();
     int A_n_rows = A.rows();
-//    delete execTimer;
 
-//    execTimer = new ExecTimer("Do CUDA pressure solve");
 #ifdef USECUDA
     // The number of non-zero entries in Ad is equal to the number of fluid containing cells, hence actual rows in A.
     cudacg_water->load_matrix(A.outerIndexPtr(), A.innerIndexPtr(), A.valuePtr(), p.data(), b.data(), A.rows(), A.nonZeros());
@@ -282,13 +279,6 @@ void SimWater::solve_pressure(const SimLabel *labels_in, bool do_tension, bool d
             logfile << center << std::endl;
         }
     }
-
-//    std::cout << "The pressure \n" << P << std::endl;
-//    std::cout << "Pressure solve A" << std::endl;
-//    std::cout << A << std::endl;
-//    std::cout << "Right hand side b" << std::endl;
-//    std::cout << b << std::endl;
-
 #else
     CG.setTolerance(1E-16);
     CG.compute(A);
@@ -328,12 +318,7 @@ void SimWater::solve_pressure(const SimLabel *labels_in, bool do_tension, bool d
 //    std::cout << "Pressure as solved for." << std::endl;
 //    std::cout << P << std::endl;
 #endif
-//    delete execTimer;
-
-//    execTimer = new ExecTimer("Do pressure velocity update");
     pressure_gradient_update(P, dt, simLS->LS, labels_in, do_tension);
-//    delete execTimer;
-//    std::cout << "X Velocity after update\n" << V[0] << std::endl;
 }
 
 void SimWater::solve_viscosity(){
@@ -380,8 +365,6 @@ void SimWater::extrapolate_velocity_from_LS(CubeX &v, Vector3i face){
             }
         }
     }
-
-//    std::cout << m << std::endl;
 
     std::queue<Vector3ui> W;
     std::array<int, 6> neighbours {0, 0, 0, 0, 0, 0};
@@ -491,10 +474,6 @@ void SimWater::update_labels_for_air(){
         }
     }
 
-//    std::cout << "Interface air set." << std::endl;
-//    std::cout << label_air << std::endl;
-//    std::cout << m << std::endl;
-
     while (!layer_coords.empty()){
         Vector3ui I = layer_coords.front();
         layer_coords.pop();
@@ -512,9 +491,6 @@ void SimWater::update_labels_for_air(){
             }
         }
     }
-
-//    std::cout << "Air Labels" << std::endl;
-//    std::cout << label_air << std::endl;
 }
 
 Vector3 SimWater::get_interface_position_between_cells(const Vector3ui &wet, const Vector3ui &dry, const CubeX &LS, scalar_t &theta){

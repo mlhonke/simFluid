@@ -77,4 +77,6 @@ private:
     int ni, nj, nk;
 };
 
+void sort_particles_by_key(CUVEC::Vec3d *p, int *cell_ids, int n_p);
+
 #endif //DPLS_SIM_PLS_CUDA_HPP

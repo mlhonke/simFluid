@@ -16,38 +16,62 @@ public:
 
     ~ExecTimer(){
         clock_gettime(CLOCK_MONOTONIC, &end);
-        auto time_spent = (double)(end.tv_sec-begin.tv_sec);
-        time_spent += (end.tv_nsec - begin.tv_nsec) / 1000000000.0;
-        std::cout << message << " : " << time_spent << std::endl;
+        double time_spent = time_elapsed(end, begin);
+        std::cout << message << " : TOTAL TIME ALIVE : " << time_spent << std::endl;
     }
 
 protected:
     struct timespec begin, end;
     std::string message;
 
+    double time_elapsed(struct timespec &now, struct timespec &before) const {
+        double time_spent = (double)(now.tv_sec-before.tv_sec);
+        time_spent += (now.tv_nsec - before.tv_nsec) / 1000000000.0;
+        return time_spent;
+    }
+
 private:
 };
 
-class ExecTimerCumulative : public ExecTimer{
+class ExecTimerSteps : public ExecTimer{
 public:
-    ExecTimerCumulative(char const* message) : ExecTimer(message) {
-        clock_gettime(CLOCK_MONOTONIC, &begin_lap);
+    ExecTimerSteps(char const* message) : ExecTimer(message){
+        last = begin;
+    }
+
+    double next(char const* step_name){
+        double time_spent = step_time();
+        std::cout << message << " : Step : " << step_name << " : Time Spent : " << time_spent << std::endl;
+        return time_spent;
+    }
+
+protected:
+    struct timespec now, last;
+
+private:
+    double step_time(){
+        clock_gettime(CLOCK_MONOTONIC, &now);
+        double time_spent = time_elapsed(now, last);
+        last = now;
+        return time_spent;
+    }
+};
+
+class ExecTimerCumulative : public ExecTimerSteps{
+public:
+    ExecTimerCumulative(char const* message) : ExecTimerSteps(message) {
     }
 
     void lap() {
         laps++;
-        clock_gettime(CLOCK_MONOTONIC, &end_lap);
-        auto time_spent = (double)(end_lap.tv_sec-begin_lap.tv_sec);
-        time_spent += (end_lap.tv_nsec - begin_lap.tv_nsec) / 1000000000.0;
-        total += time_spent;
+        std::string lap_name = "Lap " + std::to_string(laps);
+        total += next(lap_name.c_str());
         std::cout << "Average time per step: " << total / (double) laps << std::endl;
-        clock_gettime(CLOCK_MONOTONIC, &begin_lap);
     }
 
 private:
     double total = 0;
     int laps = 0;
-    struct timespec begin_lap, end_lap;
 };
 
 #endif //FERRO3D_EXECTIMER_HPP

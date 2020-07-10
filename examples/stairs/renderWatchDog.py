@@ -5,7 +5,7 @@ import os
 import signal
 
 render_time = 10
-mesh_id = 230
+mesh_id = 0
 mesh_directory = "screens/" # Where are the mesh files located to render?
 output_dir = "renders/" # Where to save rendering related files and frames.
 

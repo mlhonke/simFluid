@@ -292,12 +292,13 @@ __device__ void do_grid_redistance_now(scalar_t * LS, CUVEC::Vec3d * p, int * co
 __global__ void
 assign_grid_particle_dist(int n_cells, scalar_t *LS, CUVEC::Vec3d *p, int *index, int *count, int *cp, SimParams *C) {
     int id = blockIdx.x * blockDim.x + threadIdx.x; // grid index
-    int i = id % C->grid_w;
-    int j = (id / C->grid_w) % C->grid_h;
-    int k = id / (C->grid_h * C->grid_w);
-    CUVEC::Vec3d grid_pos(i * C->dx, j * C->dx, k * C->dx);
 //    printf("Processing cell %d, %d, %d\n", i, j, k);
     if (id < n_cells) {
+        int i = id % C->grid_w;
+        int j = (id / C->grid_w) % C->grid_h;
+        int k = id / (C->grid_h * C->grid_w);
+        CUVEC::Vec3d grid_pos(i * C->dx, j * C->dx, k * C->dx);
+
         LS[id] = 1000;
         int p_id = index[id];
         if (p_id == -1) {

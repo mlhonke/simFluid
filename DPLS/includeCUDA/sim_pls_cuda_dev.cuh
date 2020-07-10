@@ -5,7 +5,6 @@
 #include "sim_params.hpp"
 #include "cuvec.cuh"
 
-void sort_particles_by_key(CUVEC::Vec3d *p, int *cell_ids, int n_p);
 void sort_particles_by_key_on_device(CUVEC::Vec3d *p, int *cell_ids, int n_p);
 void calculate_particle_cells_on_device(int n_blocks, int threads_in_block, int n_p, CUVEC::Vec3d *p, int *cell_ids, SimParams *C);
 void reseed_surface_particles_on_device(int n_cells, CUVEC::Vec3i *coords, CUVEC::Vec3d *sp, scalar_t* LS, scalar_t *LS_grad_x, scalar_t *LS_grad_y, scalar_t *LS_grad_z, int sp_per_cell, scalar_t bandwidth, SimParams *C, int threads_in_block);
