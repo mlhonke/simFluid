@@ -1,0 +1,52 @@
+scene.camera.type = "perspective"
+scene.camera.lookat.orig = -1.0 0.5 3.0
+scene.camera.lookat.target = 0.3 0.5 0.5
+scene.camera.fieldofview = 35
+################################################################################
+scene.materials.fluid.type = glass
+#scene.materials.fluid.kd = 1. 0.824176 0.549451
+scene.materials.fluid.kr = 1 1 1
+scene.materials.fluid.kt = 1 1 1
+scene.materials.fluid.interiorior = 1.333
+scene.materials.fluid.exteriorior = 1.0
+#scene.materials.fluid.emission.gain = 1 1 1
+#scene.materials.fluid.emission.power = 10
+#scene.materials.fluid.emission.efficency = 17
+#scene.materials.fluid.emission.theta = 90
+#scene.materials.fluid.emission.samples = -1
+#scene.materials.fluid.emissin.oid = 0
+#scene.materials.fluid.visibility.indirect.diffuse.enable = 1
+#scene.materials.fluid.visibility.indirect.glossy.enable = 1
+#scene.materials.fluid.visibility.indirect.specular.enable = 1
+################################################################################
+scene.textures.table.type = blender_noise
+scene.materials.slab.type = matte
+#scene.materials.slab.kd = table
+scene.materials.slab.kd = 0.8 0.64 0.45
+################################################################################
+scene.materials.container.type = roughglass
+scene.materials.container.kr = 0.5 0.5 0.5
+scene.materials.container.kt = 0.5 0.5 0.5
+scene.materials.container.interiorior = 1.5
+scene.materials.container.exteriorior = 1.0
+scene.materials.container.uroughness = 0.5
+scene.materials.container.vroughness = 0.5
+################################################################################
+scene.lights.l1.type = sky2
+scene.lights.l1.gain = 0.00001 0.00001 0.00001
+scene.lights.l1.dir = 1.0 0.0 1.0
+scene.lights.l1.relsize = 1.0
+scene.lights.l1.turbidity = 2.0
+scene.lights.l1.ground.enable = 0
+
+scene.lights.l2.type = point
+scene.lights.l2.position = 0.5 0.5 5.0
+scene.lights.l2.gain = 1.0 1.0 1.0
+################################################################################
+scene.objects.fluid.material = fluid
+scene.objects.fluid.ply = screens/mesh_0000019.ply
+scene.objects.slab.material = slab
+scene.objects.slab.ply = slab.ply
+scene.objects.container.material = container
+scene.objects.container.ply = container.ply
+################################################################################

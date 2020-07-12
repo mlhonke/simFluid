@@ -47,7 +47,7 @@ SimPLSCUDA::SimPLSCUDA(SimParams &C, SimParams* DEV_C, std::array<scalar_t*, 3> 
 }
 
 void SimPLSCUDA::advance(int cur_step, scalar_t dt) {
-    ExecTimerSteps timer("SIMPLSCUDA");
+    ExecTimerSteps timer("SIMPLSCUDA", false);
     sp_index.clear(); np_index.clear(); pp_index.clear();
     sp_count.clear(); np_count.clear(); pp_count.clear();
 
@@ -56,8 +56,6 @@ void SimPLSCUDA::advance(int cur_step, scalar_t dt) {
     std::cout << "Processing PLS" << std::endl;
 #endif
     if (iteration == 1){
-//        SimPLS::reseed_particles();
-//        update_particles_on_device_from_host();
         reinit_pls();
     }
     timer.next("Copy LS, and initial init");
@@ -116,9 +114,7 @@ void SimPLSCUDA::advance(int cur_step, scalar_t dt) {
 #endif
     cuda_check(cudaMemcpy(DEV_cp, cp.memptr(), n_cells*sizeof(int), cudaMemcpyHostToDevice));
     update_levelset_distances_on_device(n_cells, get_number_of_blocks(n_cells), threads_in_block, DEV_LS, DEV_sp, DEV_sp_index, DEV_sp_count, DEV_cp, DEV_C);
-    auto LScopy = new ExecTimer("LS COPY TIME");
     cuda_check(cudaMemcpy(LS_unsigned.memptr(), DEV_LS, n_cells*sizeof(scalar_t), cudaMemcpyDeviceToHost));
-    delete LScopy;
     cuda_check(cudaMemcpy(cp.memptr(), DEV_cp, n_cells*sizeof(int), cudaMemcpyDeviceToHost));
     update_levelset_distances_on_device(n_cells, get_number_of_blocks(n_cells), threads_in_block, DEV_LS_pos, DEV_pp, DEV_pp_index, DEV_pp_count, DEV_cp, DEV_C);
     update_levelset_distances_on_device(n_cells, get_number_of_blocks(n_cells), threads_in_block, DEV_LS_neg, DEV_np, DEV_np_index, DEV_np_count, DEV_cp, DEV_C);
@@ -127,12 +123,7 @@ void SimPLSCUDA::advance(int cur_step, scalar_t dt) {
     cuda_check(cudaMemcpy(LS_pos.memptr(), DEV_LS_pos, n_cells*sizeof(scalar_t), cudaMemcpyDeviceToHost));
     cuda_check(cudaMemcpy(LS_neg.memptr(), DEV_LS_neg, n_cells*sizeof(scalar_t), cudaMemcpyDeviceToHost));
     timer.next("Update level set distances");
-//    std::cout << "LS" << std::endl;
-//    std::cout << LS << std::endl;
-//    std::cout << "+LS" << std::endl;
-//    std::cout << LS_pos << std::endl;
-//    std::cout << "-LS" << std::endl;
-//    std::cout << LS_neg << std::endl;
+
     cuda_check(cudaMemcpy(&sp[0], DEV_sp, n_sp*sizeof(CUVEC::Vec3d), cudaMemcpyDeviceToHost));
 //    cuda_check(cudaMemcpy(&np[0], DEV_np, n_np*sizeof(CUVEC::Vec3d), cudaMemcpyDeviceToHost));
 //    cuda_check(cudaMemcpy(&pp[0], DEV_pp, n_pp*sizeof(CUVEC::Vec3d), cudaMemcpyDeviceToHost));
@@ -164,10 +155,7 @@ void SimPLSCUDA::advance(int cur_step, scalar_t dt) {
 
     ++iteration;
 
-//    precalc_fedkiw_curvature();
-//    print_item(&sp_count[0]);
-//    print_item(&sp_index[0]);
-//    test_height_function();
+    precalc_fedkiw_curvature();
 }
 
 void SimPLSCUDA::reinit_pls(){
@@ -216,49 +204,6 @@ void SimPLSCUDA::reinit_pls(){
     reseed_sign_particles_on_device(surf_coords.size(), DEV_sp, DEV_pp, DEV_np, DEV_LS, DEV_grad_LS_x, DEV_grad_LS_y, DEV_grad_LS_z, surface_particles_per_cell, sign_particles_per_cell, 1.0, DEV_C, threads_in_block);
 
     cudaFree(DEV_surf_coords);
-}
-
-void SimPLSCUDA::print_item(int* item){
-    for (int k = 0; k < grid_d; k++){
-        for (int i = 0; i < grid_w; i++){
-            for (int j = 0; j < grid_h; j++){
-                int index = ccti(i, j, k, grid_w, grid_h);
-                std::cout << item[index] << " ";
-            }
-            std::cout << std::endl;
-        }
-        std::cout << std::endl << std::endl;
-    }
-}
-
-void SimPLSCUDA::save_data(){
-    LS.save("LS.bin");
-}
-
-void SimPLSCUDA::load_data(){
-    LS.load("LS.bin");
-    reinit_pls();
-}
-
-void sort_particles_by_key(CUVEC::Vec3d *p, int *cell_ids, int n_p){
-    std::vector<CUVEC::Vec3d> HOST_p;
-    HOST_p.resize(n_p);
-    cuda_check(cudaMemcpy(&HOST_p[0], p, n_p*sizeof(CUVEC::Vec3d), cudaMemcpyDeviceToHost));
-    std::vector<int> HOST_key;
-    HOST_key.resize(n_p);
-    cuda_check(cudaMemcpy(&HOST_key[0], cell_ids, n_p*sizeof(int), cudaMemcpyDeviceToHost));
-    std::multimap<int, CUVEC::Vec3d> cell_and_p;
-    for (int i = 0; i < n_p; i++){
-        cell_and_p.insert(std::pair<int, CUVEC::Vec3d>(HOST_key[i], HOST_p[i]));
-    }
-    int i = 0;
-    for (auto const& cp : cell_and_p){
-        HOST_key[i] = cp.first;
-        HOST_p[i] = cp.second;
-        i++;
-    }
-    cuda_check(cudaMemcpy(p, &HOST_p[0], n_p*sizeof(CUVEC::Vec3d), cudaMemcpyHostToDevice));
-    cuda_check(cudaMemcpy(cell_ids, &HOST_key[0], n_p*sizeof(int), cudaMemcpyHostToDevice));
 }
 
 void SimPLSCUDA::generate_indicies_for_particles(int* DEV_p_keys, int* &DEV_p_index, int* &DEV_p_count, std::vector<int> &p_index, std::vector<int> &p_count, int n_p){
@@ -383,9 +328,9 @@ void SimPLSCUDA::redistance_neighbour(const Vector3i &face, CubeX &unsigned_dist
         if (distance < unsigned_dist(face(0), face(1), face(2)) || cp(face(0), face(1), face(2)) == -1) {
             unsigned_dist(face(0), face(1), face(2)) = distance;
             cp(face(0), face(1), face(2)) = cp_id;
-            if (unsigned_dist(face(0), face(1), face(2)) < dx*5.0){
+//            if (unsigned_dist(face(0), face(1), face(2)) < dx*5.0){
                 cell_queue.push({face(0), face(1), face(2)});
-            }
+//            }
         }
     }
 }
@@ -399,9 +344,9 @@ void SimPLSCUDA::propagate_interface_distances() {
                 if (cp(i, j, k) != -1) {
                     cell_queue.push(Vector3i({i, j, k}));
                 }
-                else {
-                    LS_unsigned(i, j, k) = std::abs(LS(i, j, k));
-                }
+//                else {
+//                    LS_unsigned(i, j, k) = std::abs(LS(i, j, k));
+//                }
             }
         }
     }
@@ -455,93 +400,128 @@ void SimPLSCUDA::correct_grid_point_signs() {
     }
 }
 
-scalar_t SimPLSCUDA::get_height_normal(Vector3 &base, Vector3 &n, scalar_t h_ref, scalar_t dx){
-    return get_height_normal_pls(base, n, h_ref, dx);
+scalar_t SimPLSCUDA::get_height_normal(const Vector3 &base, const Vector3 &n, scalar_t h_ref, scalar_t dx_column){
+    return get_height_normal_pls(base, n, h_ref, dx_column);
 }
 
-scalar_t SimPLSCUDA::get_height_normal_pls(Vector3 base_in, Vector3 n_in, scalar_t h_ref, scalar_t dx, int n_search){
+scalar_t SimPLSCUDA::get_height_normal_pls(const Vector3 &base_in, const Vector3 &n_in, scalar_t h_ref, scalar_t dx_column, int n_search){
     CUVEC::Vec3d base(base_in(0), base_in(1), base_in(2));
     CUVEC::Vec3d n(n_in(0), n_in(1), n_in(2));
     CUVEC::Vec3d n_unit = CUVEC::normalized(n);
     scalar_t best_error = 1000;
     scalar_t best_height = 0;
-    std::vector<scalar_t> candidates;
-    scalar_t tolerance = 2.0*(dx/std::sqrt(surface_particles_per_cell));
+    scalar_t p_dist = 1.0/std::sqrt(surface_particles_per_cell); // rough expected interparticle distances
+    scalar_t cell_tol = 1.0*p_dist; // distance away from border to add neighbouring cells to the search
+    scalar_t p_tol = 1.0*p_dist*dx;
 
     CUVEC::Vec3d search = base;
     for (int i = 0; i < n_search; i++) {
-//        std::cout << "LS val at search point " << grid_tricerp({search[0], search[1], search[2]}, LS, dx, false) << std::endl;
         std::vector<CUVEC::Vec3i> search_coords;
         CUVEC::Vec3d search_coord_d(search[0]/dx, search[1]/dx, search[2]/dx);
         CUVEC::Vec3i search_coord((int)std::round(search_coord_d[0]), (int)std::round(search_coord_d[1]), (int)std::round(search_coord_d[2]));
         search_coords.push_back(search_coord);
-        search_coord_d += CUVEC::Vec3d(0.1, 0.1, 0.1);
+        search_coord_d += CUVEC::Vec3d(cell_tol, cell_tol, cell_tol);
         CUVEC::Vec3i search_coord_2((int)std::round(search_coord_d[0]), (int)std::round(search_coord_d[1]), (int)std::round(search_coord_d[2]));
         if (search_coord_2 != search_coord)
             search_coords.push_back(search_coord_2);
-        search_coord_d -= CUVEC::Vec3d(0.2, 0.2, 0.2);
+        search_coord_d -= CUVEC::Vec3d(2.0*cell_tol, 2.0*cell_tol, 2.0*cell_tol);
         search_coord_2 = CUVEC::Vec3i((int)std::round(search_coord_d[0]), (int)std::round(search_coord_d[1]), (int)std::round(search_coord_d[2]));
         if (search_coord_2 != search_coord){
             search_coords.push_back(search_coord_2);
         }
         for (const auto& coord : search_coords) {
-            if (is_coord_valid({coord[0], coord[1], coord[2]}, {grid_w, grid_h, grid_d})) {
-                int cell_id_search = ccti(coord[0], coord[1], coord[2], grid_w, grid_h);
-                int sp_start_search = sp_index[cell_id_search];
-                int sp_count_search = sp_count[cell_id_search];
-                if (sp_start_search != -1) {
-                    for (int j = sp_start_search; j < sp_start_search + sp_count_search; j++) {
-                        CUVEC::Vec3d p = sp[j];
-                        CUVEC::Vec3d d = p - base; // separate vector between base and particle.
-                        scalar_t h = CUVEC::dot(d, n_unit); // the actual height is the part along the normal vector.
-                        scalar_t error = std::sqrt(std::abs(CUVEC::mag2(d) - h * h)); // what component is perpendicular to the normal vector.
-                        error += 0.1*std::abs(h_ref - h); // how much to penalize massive height differences (multi surface)
-                        if (error < best_error){
-                            best_height = h;
-                            best_error = error;
-                        }
-                        if (error < tolerance) {
-                            candidates.push_back(h);
-                        }
-                    }
-                }
+            if (get_height_normal_pls_search(coord, base, n_unit, h_ref, p_tol, best_error, best_height)){
+                return best_height;
             }
         }
         search += n;
     }
 
-    if (candidates.empty()){ // didn't find anything closer than this, where is the surface?
-//        std::cout << "Failed to find a height. " << std::endl;
-//        print_item(&sp_count[0]);
-//        print_item(&sp_index[0]);
-//        std::cout << "base in " << base_in(0) << " " << base_in(1) << " " << base_in(2) << std::endl;
-//        std::cout << "n_in " << n_in(0) << " " << n_in(1) << " " << n_in(2) << std::endl;
-        return best_height;
-    }
-
-//    std::cout << "Number of candidates found " << candidates.size() << std::endl;
-
-//    if (!candidates.empty()){
-//        best_error = std::abs(h_ref - candidates[0]);
-//        for (const auto &h : candidates) {
-//            scalar_t error = std::abs(h_ref - h);
-//            if (error < best_error) {
-//                best_error = error;
-//                best_height = h;
-//            }
-//        }
-//    }
-
     return best_height;
 }
 
+bool SimPLSCUDA::get_height_normal_pls_search(const CUVEC::Vec3i &coord, const CUVEC::Vec3d &base,
+        const CUVEC::Vec3d &n_unit, scalar_t h_ref, scalar_t p_tol, scalar_t &best_error, scalar_t &best_height){
+    if (is_coord_valid({coord[0], coord[1], coord[2]}, {grid_w, grid_h, grid_d})) {
+        int cell_id_search = ccti(coord[0], coord[1], coord[2], grid_w, grid_h);
+        int sp_start_search = sp_index[cell_id_search];
+        int sp_count_search = sp_count[cell_id_search];
+        if (sp_start_search != -1) {
+            for (int j = sp_start_search; j < sp_start_search + sp_count_search; j++) {
+                CUVEC::Vec3d d = sp[j] - base; // separate vector between base and particle.
+                scalar_t h = CUVEC::dot(d, n_unit); // the actual height is the part along the normal vector.
+                scalar_t error = std::sqrt(std::abs(CUVEC::mag2(d) - h * h)); // what component is perpendicular to the normal vector.
+                error += 0.1*std::abs(h_ref - h); // how much to penalize massive height differences (multi surface)
+                if (error < best_error){
+                    best_height = h;
+                    if (error < p_tol){
+                        return true;
+                    }
+                    best_error = error;
+                }
+            }
+        }
+    }
+
+    return false;
+}
+
 scalar_t SimPLSCUDA::get_curvature(Vector3 &pos){
-//    std::cout << "Caling get_curvature from SimPLSCUDA" << std::endl;
     scalar_t retval = clamp(1.0*(get_curvature_height_normal(pos)), -1.0/dx, 1.0/dx);
-//    scalar_t retval = 1.0*get_curvature_height_normal(pos);
 //    std::cout << retval << " " << pos(0) << " " << pos(1) << " " << pos(2) << std::endl;
-//    std::cout << retval << std::endl;
     return retval;
+}
+
+void SimPLSCUDA::print_all_levelsets(){
+    std::cout << "LS" << std::endl;
+    std::cout << LS << std::endl;
+    std::cout << "+LS" << std::endl;
+    std::cout << LS_pos << std::endl;
+    std::cout << "-LS" << std::endl;
+    std::cout << LS_neg << std::endl;
+}
+
+void SimPLSCUDA::print_item(int* item){
+    for (int k = 0; k < grid_d; k++){
+        for (int i = 0; i < grid_w; i++){
+            for (int j = 0; j < grid_h; j++){
+                int index = ccti(i, j, k, grid_w, grid_h);
+                std::cout << item[index] << " ";
+            }
+            std::cout << std::endl;
+        }
+        std::cout << std::endl << std::endl;
+    }
+}
+
+void SimPLSCUDA::save_data(){
+    LS.save("LS.bin");
+}
+
+void SimPLSCUDA::load_data(){
+    LS.load("LS.bin");
+    reinit_pls();
+}
+
+void sort_particles_by_key(CUVEC::Vec3d *p, int *cell_ids, int n_p){
+    std::vector<CUVEC::Vec3d> HOST_p;
+    HOST_p.resize(n_p);
+    cuda_check(cudaMemcpy(&HOST_p[0], p, n_p*sizeof(CUVEC::Vec3d), cudaMemcpyDeviceToHost));
+    std::vector<int> HOST_key;
+    HOST_key.resize(n_p);
+    cuda_check(cudaMemcpy(&HOST_key[0], cell_ids, n_p*sizeof(int), cudaMemcpyDeviceToHost));
+    std::multimap<int, CUVEC::Vec3d> cell_and_p;
+    for (int i = 0; i < n_p; i++){
+        cell_and_p.insert(std::pair<int, CUVEC::Vec3d>(HOST_key[i], HOST_p[i]));
+    }
+    int i = 0;
+    for (auto const& cp : cell_and_p){
+        HOST_key[i] = cp.first;
+        HOST_p[i] = cp.second;
+        i++;
+    }
+    cuda_check(cudaMemcpy(p, &HOST_p[0], n_p*sizeof(CUVEC::Vec3d), cudaMemcpyHostToDevice));
+    cuda_check(cudaMemcpy(cell_ids, &HOST_key[0], n_p*sizeof(int), cudaMemcpyHostToDevice));
 }
 
 //void SimPLSCUDA::test_height_function(){

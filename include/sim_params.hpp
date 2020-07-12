@@ -12,10 +12,10 @@ typedef struct SimParams {
     grid_w(grid_w), grid_h(grid_h), grid_d(grid_d), dx(dx), frac_cfl(frac_cfl), max_dt(max_dt), render_dt(render_dt)
     {}
 
-    int const grid_w = 60;
-    int const grid_h = 60;
-    int const grid_d = 60;
-    scalar_t const dx = 1.0/60.0;
+    int const grid_w = 30;
+    int const grid_h = 30;
+    int const grid_d = 30;
+    scalar_t const dx = 1.0/30.0;
     scalar_t const frac_cfl = 0.1;
     scalar_t const max_dt = 0.1;
     scalar_t const render_dt = 0.1;

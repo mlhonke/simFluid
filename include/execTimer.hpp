@@ -10,19 +10,22 @@
 
 class ExecTimer {
 public:
-    ExecTimer(char const* message) : message(message) {
+    ExecTimer(char const* message, bool active = true) : message(message), active(active) {
         clock_gettime(CLOCK_MONOTONIC, &begin);
     }
 
     ~ExecTimer(){
-        clock_gettime(CLOCK_MONOTONIC, &end);
-        double time_spent = time_elapsed(end, begin);
-        std::cout << message << " : TOTAL TIME ALIVE : " << time_spent << std::endl;
+        if (active) {
+            clock_gettime(CLOCK_MONOTONIC, &end);
+            double time_spent = time_elapsed(end, begin);
+            std::cout << message << " : TOTAL TIME ALIVE : " << time_spent << std::endl;
+        }
     }
 
 protected:
     struct timespec begin, end;
     std::string message;
+    bool active;
 
     double time_elapsed(struct timespec &now, struct timespec &before) const {
         double time_spent = (double)(now.tv_sec-before.tv_sec);
@@ -35,13 +38,16 @@ private:
 
 class ExecTimerSteps : public ExecTimer{
 public:
-    ExecTimerSteps(char const* message) : ExecTimer(message){
+    ExecTimerSteps(char const* message, bool active = true) : ExecTimer(message, active){
         last = begin;
     }
 
     double next(char const* step_name){
-        double time_spent = step_time();
-        std::cout << message << " : Step : " << step_name << " : Time Spent : " << time_spent << std::endl;
+        double time_spent = 0;
+        if (active) {
+            time_spent = step_time();
+            std::cout << message << " : Step : " << step_name << " : Time Spent : " << time_spent << std::endl;
+        }
         return time_spent;
     }
 
@@ -59,14 +65,16 @@ private:
 
 class ExecTimerCumulative : public ExecTimerSteps{
 public:
-    ExecTimerCumulative(char const* message) : ExecTimerSteps(message) {
+    ExecTimerCumulative(char const* message, bool active = true) : ExecTimerSteps(message, active) {
     }
 
     void lap() {
-        laps++;
-        std::string lap_name = "Lap " + std::to_string(laps);
-        total += next(lap_name.c_str());
-        std::cout << "Average time per step: " << total / (double) laps << std::endl;
+        if (active) {
+            laps++;
+            std::string lap_name = "Lap " + std::to_string(laps);
+            total += next(lap_name.c_str());
+            std::cout << "Average time per step: " << total / (double) laps << std::endl;
+        }
     }
 
 private:

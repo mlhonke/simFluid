@@ -49,10 +49,10 @@ protected:
     scalar_t get_LS(const Vector3& pos);
     scalar_t get_LS_cerp(const Vector3& pos);
     scalar_t get_curvature_laplace(const Vector3 &pos);
-    scalar_t get_curvature_fedkiw(const Vector3 &pos);
+    scalar_t get_curvature_fedkiw(const Vector3 &pos) const;
     void precalc_fedkiw_curvature();
-    virtual scalar_t get_height_normal(Vector3 &base, Vector3 &n, scalar_t h_ref, scalar_t dx);
-    scalar_t get_height_normal_ls(Vector3 &base, Vector3 &n, scalar_t h_ref, scalar_t dx);
+    virtual scalar_t get_height_normal(const Vector3 &base, const Vector3 &n, scalar_t h_ref, scalar_t dx_column);
+    scalar_t get_height_normal_ls(const Vector3 &base, const Vector3 &n, scalar_t h_ref, scalar_t dx_column);
     scalar_t get_curvature_height_normal(Vector3 &pos);
 
     int const grid_w;

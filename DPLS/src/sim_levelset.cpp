@@ -66,8 +66,9 @@ void SimLevelSet::advance(int cur_step, scalar_t dt) {
 
     redistance();
 
-//    precalc_fedkiw_curvature();
-//    std::cout << "LS curvature\n" << LS_K << std::endl;
+    precalc_fedkiw_curvature();
+//    std::cout << LS << std::endl;
+//    std::cout << LS_K << std::endl;
 }
 
 void SimLevelSet::save_data() {
@@ -270,11 +271,11 @@ void SimLevelSet::initialize_level_set_circle(const Vector3 &center, scalar_t ra
     }
 }
 
-scalar_t SimLevelSet::get_height_normal(Vector3 &base, Vector3 &n, scalar_t h_ref, scalar_t dx) {
-    return get_height_normal_ls(base, n, h_ref, dx);
+scalar_t SimLevelSet::get_height_normal(const Vector3 &base, const Vector3 &n, scalar_t h_ref, scalar_t dx_column) {
+    return get_height_normal_ls(base, n, h_ref, dx_column);
 }
 
-scalar_t SimLevelSet::get_height_normal_ls(Vector3 &base, Vector3 &n, scalar_t h_ref, scalar_t dx) {
+scalar_t SimLevelSet::get_height_normal_ls(const Vector3 &base, const Vector3 &n, scalar_t h_ref, scalar_t dx_column) {
     std::vector<scalar_t> candidates;
     scalar_t prev_ls = grid_tricerp(base, LS, dx, false); // initial ls value
     Vector3 search = base;
@@ -285,10 +286,10 @@ scalar_t SimLevelSet::get_height_normal_ls(Vector3 &base, Vector3 &n, scalar_t h
         scalar_t new_ls = grid_tricerp(search, LS, dx, false);
         if (!is_sign_equal(prev_ls, new_ls)) {
             scalar_t theta = prev_ls / (prev_ls - new_ls);
-            candidates.push_back(h + theta * dx);
+            candidates.push_back(h + theta * dx_column);
         }
         prev_ls = new_ls;
-        h += dx;
+        h += dx_column;
     }
 
     if (candidates.empty()) {
@@ -315,9 +316,10 @@ scalar_t SimLevelSet::get_curvature_height_normal(Vector3 &pos) {
     n = arma::normalise(n);
     scalar_t n_eps = 10E-10;
 
-    scalar_t dx_column = dx;
+    scalar_t dx_column;
     if (std::abs(std::abs(n(0)) - 1.0) < n_eps || std::abs(std::abs(n(1)) - 1.0) < n_eps ||
         std::abs(std::abs(n(2)) - 1.0) < n_eps) { // Completely along an axis.
+        dx_column = dx;
     } else {
         scalar_t square_theta = std::abs(atan(n(2) / n(0))); // guaranteed to be valid
         if (square_theta > PI / 4.0) square_theta = PI / 2.0 - square_theta;
@@ -378,9 +380,15 @@ scalar_t SimLevelSet::get_curvature_height_normal(Vector3 &pos) {
 }
 
 scalar_t SimLevelSet::get_curvature(Vector3 &pos) {
-    scalar_t retval = clamp(1.0 * get_curvature_height_normal(pos), -1.0 / dx, 1.0 / dx);
-//    std::cout << retval << " " << pos(0) << " " << pos(1) << " " << pos(2) << std::endl;
-//    std::cout << retval << std::endl;
+    scalar_t retval = clamp(1.0 * get_curvature_fedkiw(pos), -1.0 / dx, 1.0 / dx);
+
+//    double i = pos(0)/dx;
+//    double j = pos(1)/dx;
+//    double k = pos(2)/dx;
+//
+//    if (i == j)
+//        std::cout << retval << " " << pos(0)/dx << " " << pos(1)/dx << " " << pos(2)/dx << std::endl;
+
     return retval;
 }
 
@@ -418,11 +426,6 @@ void SimLevelSet::precalc_fedkiw_curvature() {
     }
 }
 
-scalar_t SimLevelSet::get_curvature_fedkiw(const Vector3 &pos) {
-    scalar_t i = pos(0) / dx;
-    scalar_t j = pos(1) / dx;
-    scalar_t k = pos(2) / dx;
-
-//    std::cout << i << " " << j << " " << k << std::endl;
+scalar_t SimLevelSet::get_curvature_fedkiw(const Vector3 &pos) const{
     return clamp(grid_trilerp(pos, LS_K, dx), -1.0 / dx, 1.0 / dx);
 }

@@ -10,7 +10,7 @@ int main(int argc, char** argv){
     int n_steps;
     SimWater::create_params_from_args(argc, argv, n_steps, params, water_params);
     SimWater sim = SimWater(*params, *water_params);
-    sim.write_mesh = true;
+    sim.write_mesh = false;
 
     // Create stairs.
     sim.fluid_label->label.subcube(2, 2, 2, params->grid_h/4, params->grid_h-1, params->grid_d/2+1).fill(SOLID);
@@ -30,7 +30,7 @@ int main(int argc, char** argv){
 
     // Choose a surface tracking method and make an initial surface.
     auto level_set = new SimPLSCUDA(*params, sim.DEV_C, sim.DEV_V);
-    level_set->reseed_interval = 1;
+//    level_set->reseed_interval = 1;
     Vector3 corner = {1, 1, params->grid_d/2.0+1};
     std::cout << corner << std::endl;
     Vector3 corner_2 = {params->grid_w/4.0, params->grid_h-1.0, params->grid_h-2.0};

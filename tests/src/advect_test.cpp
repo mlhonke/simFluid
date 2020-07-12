@@ -9,6 +9,8 @@
 #include "sim_utils.hpp"
 #include "test_tools.hpp"
 
+TEST_SUITE_BEGIN("Advection");
+
 TEST_CASE("Advect RK3") {
     SimParams *C;
     macVel V;
@@ -63,3 +65,6 @@ TEST_CASE("Advect RK3 CUDA") {
     free_mac_velocities_on_device(DEV_V);
     delete C;
 }
+
+
+TEST_SUITE_END();

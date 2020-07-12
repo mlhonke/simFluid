@@ -22,12 +22,13 @@ public:
     void update_particles_on_device_from_host();
     void free_particles_on_device();
 
-    scalar_t get_height_normal_pls(Vector3 base_in, Vector3 n_in, scalar_t h_ref, scalar_t dx, int n_search = 7);
-    scalar_t get_height_normal(Vector3 &base_in, Vector3 &n_in, scalar_t h_ref, scalar_t dx);
+    bool get_height_normal_pls_search(const CUVEC::Vec3i &coord, const CUVEC::Vec3d &base, const CUVEC::Vec3d &n_unit, scalar_t h_ref, scalar_t p_tol, scalar_t &best_error, scalar_t &best_height);
+    scalar_t get_height_normal_pls(const Vector3 &base_in, const Vector3 &n_in, scalar_t h_ref, scalar_t dx_column, int n_search = 7);
+    scalar_t get_height_normal(const Vector3 &base_in, const Vector3 &n_in, scalar_t h_ref, scalar_t dx_column) override;
 
     int get_number_of_blocks(int n_particles);
 //    void test_height_function();
-    scalar_t get_curvature(Vector3 &pos);
+    scalar_t get_curvature(Vector3 &pos) override;
     void print_item(int* item);
 
     // Levelset
@@ -60,7 +61,7 @@ public:
     int reseed_interval;
     int surface_particles_per_cell;
     int sign_particles_per_cell;
-//
+
 private:
     void generate_indicies_for_particles(int* DEV_p_keys, int* &DEV_p_index, int* &DEV_p_count, std::vector<int> &p_index, std::vector<int> &p_count, int n_p);
     void redistance_neighbour(const Vector3i &face, CubeX &unsigned_dist, const CubeXi &closest_point, std::queue<Vector3i> &cell_queue, int cp_id);
@@ -69,6 +70,7 @@ private:
     void copy_particles_to_host();
     void send_particles_to_host_pls();
     void reinit_pls();
+    void print_all_levelsets();
 
     int iteration;
     scalar_t bandwidth; //in number of cells

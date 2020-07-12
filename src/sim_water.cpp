@@ -81,18 +81,16 @@ void SimWater::create_params_from_args(int argc, char **argv, int &n_steps, SimP
 
 void SimWater::save_data(){
     Sim::save_data();
-
     simLS->save_data();
 }
 
 void SimWater::load_data(){
     Sim::load_data();
-
     simLS->load_data();
 }
 
 void SimWater::step(){
-    ExecTimerSteps timer("Simulation time");
+    ExecTimerSteps timer("Simulation time", false);
     if (cur_step % 10 == 0){
 //        save_data();
     }
@@ -125,7 +123,7 @@ void SimWater::step(){
     solve_viscosity();
     timer.next("Solving viscosity");
     std::cout << "Solving pressure." << std::endl;
-    solve_pressure(fluid_label, true, false, false);
+    solve_pressure(fluid_label, false, false, false);
     timer.next("Solving pressure");
 
     cur_step++;
