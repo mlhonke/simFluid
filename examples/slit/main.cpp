@@ -9,13 +9,13 @@ int main(int argc, char** argv){
     int n_steps;
     SimWater::create_params_from_args(argc, argv, n_steps, params, water_params);
     SimWater sim = SimWater(*params, *water_params);
-    sim.write_mesh = false;
+//    sim.write_mesh = true;
 
     // Create scenario.
     CubeXi container(params->grid_w+2, params->grid_w+2, params->grid_w+2, arma::fill::zeros);
     container.subcube(0, 0, params->grid_w/2.0, params->grid_w+1, params->grid_h/2.0, params->grid_d+1).fill(SOLID);
     container.subcube(2, 2, params->grid_w/2.0+2, params->grid_w-1, params->grid_h/2.0-2, params->grid_d+1).fill(AIR);
-    container.subcube(params->grid_w/2.0-params->grid_w/8.0+2, params->grid_h/2.0-2, params->grid_w/2.0+2,
+    container.subcube(params->grid_w/2.0-params->grid_w/8.0+2, params->grid_h/2.0-2, params->grid_w/2.0+3,
             params->grid_w/2.0+params->grid_w/8.0, params->grid_h/2.0, params->grid_w/2.0+2+params->grid_d/8.0).fill(AIR);
     container.subcube(0, params->grid_w/2.0-1, 0, params->grid_w+1, params->grid_h+1, params->grid_d/2.0).fill(SOLID);
     container.subcube(2, params->grid_w/2.0+1, 2, params->grid_w-1, params->grid_h-1, params->grid_d/2.0).fill(AIR);

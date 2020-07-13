@@ -119,9 +119,9 @@ void SimWater::step(){
     timer.next("Advecting velocity");
     add_gravity_to_velocity(V[2], dt);
     timer.next("Add gravity to velocity");
-    std::cout << "Solving viscosity." << std::endl;
-    solve_viscosity();
-    timer.next("Solving viscosity");
+//    std::cout << "Solving viscosity." << std::endl;
+//    solve_viscosity();
+//    timer.next("Solving viscosity");
     std::cout << "Solving pressure." << std::endl;
     solve_pressure(fluid_label, false, false, false);
     timer.next("Solving pressure");
@@ -154,7 +154,7 @@ void SimWater::extrapolate_velocities_from_LS() {
     extrapolate_velocity_from_LS(V[1], {0, -1, 0});
     extrapolate_velocity_from_LS(V[2], {0, 0, -1});
 
-    bool do_pressure_extrap = false;
+    bool do_pressure_extrap = true;
     if (do_pressure_extrap) {
         V_solid[0] = V[0];
         V_solid[1] = V[1];
@@ -467,6 +467,8 @@ void SimWater::update_labels_for_air(){
                             layer_coords.push(air_coord);
                         }
                     }
+                } else if (fluid_label->label(il, jl, kl) == SOLID){
+                    air_label->label(il, jl, kl) = SOLID;
                 }
             }
         }
