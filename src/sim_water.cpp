@@ -119,11 +119,11 @@ void SimWater::step(){
     timer.next("Advecting velocity");
     add_gravity_to_velocity(V[2], dt);
     timer.next("Add gravity to velocity");
-//    std::cout << "Solving viscosity." << std::endl;
-//    solve_viscosity();
-//    timer.next("Solving viscosity");
+    std::cout << "Solving viscosity." << std::endl;
+    solve_viscosity();
+    timer.next("Solving viscosity");
     std::cout << "Solving pressure." << std::endl;
-    solve_pressure(fluid_label, false, false, false);
+    solve_pressure(fluid_label, true, false, false);
     timer.next("Solving pressure");
 
     cur_step++;
@@ -153,6 +153,8 @@ void SimWater::extrapolate_velocities_from_LS() {
     extrapolate_velocity_from_LS(V[0], {-1, 0, 0});
     extrapolate_velocity_from_LS(V[1], {0, -1, 0});
     extrapolate_velocity_from_LS(V[2], {0, 0, -1});
+
+    set_boundary_velocities();
 
     bool do_pressure_extrap = true;
     if (do_pressure_extrap) {
@@ -316,7 +318,7 @@ void SimWater::solve_pressure(const SimLabel *labels_in, bool do_tension, bool d
 //    std::cout << "Pressure as solved for." << std::endl;
 //    std::cout << P << std::endl;
 #endif
-    pressure_gradient_update(P, dt, simLS->LS, labels_in, do_tension);
+    pressure_gradient_update(P, dt, simLS->LS, labels_in, do_tension, check_air);
 }
 
 void SimWater::solve_viscosity(){
@@ -582,7 +584,7 @@ void SimWater::build_A_and_b(MatrixA &A, VectorXs &b, scalar_t dt, const CubeX &
 }
 
 void SimWater::pressure_gradient_update_velocity(CubeX &v, const CubeX &v_solid, const CubeX &p, const CubeX &LS, const Vector3ui &face,
-        scalar_t scale, const SimLabel *label_in, bool do_tension){
+        scalar_t scale, const SimLabel *label_in, bool do_tension, bool check_air){
     unsigned int d = 0;
     scalar_t MAXP = 1000;
     for (auto &val : v){
@@ -628,12 +630,12 @@ void SimWater::pressure_gradient_update_velocity(CubeX &v, const CubeX &v_solid,
     }
 }
 
-void SimWater::pressure_gradient_update(const CubeX &p, scalar_t dt, CubeX& LS, const SimLabel *label_in, bool do_tension){
+void SimWater::pressure_gradient_update(const CubeX &p, scalar_t dt, CubeX& LS, const SimLabel *label_in, bool do_tension, bool check_air){
     scalar_t scale = dt / (density * scale_w); //Assuming equal scale for w and h.
 //    std::cout << "Scale for gradient update " << scale << std::endl;
-    pressure_gradient_update_velocity(V[0], V_solid[0], p, LS, {1, 0, 0}, scale, label_in, do_tension);
-    pressure_gradient_update_velocity(V[1], V_solid[1], p, LS, {0, 1, 0}, scale, label_in, do_tension);
-    pressure_gradient_update_velocity(V[2], V_solid[2], p, LS, {0, 0, 1}, scale, label_in, do_tension);
+    pressure_gradient_update_velocity(V[0], V_solid[0], p, LS, {1, 0, 0}, scale, label_in, do_tension, check_air);
+    pressure_gradient_update_velocity(V[1], V_solid[1], p, LS, {0, 1, 0}, scale, label_in, do_tension, check_air);
+    pressure_gradient_update_velocity(V[2], V_solid[2], p, LS, {0, 0, 1}, scale, label_in, do_tension, check_air);
 }
 
 void SimWater::build_A_and_b_viscosity(MatrixA &A, VectorXs &b, MatrixA &Ad, unsigned int nx, unsigned int ny, unsigned int nz, Vector3 offset){

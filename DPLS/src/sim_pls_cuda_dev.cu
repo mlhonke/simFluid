@@ -133,49 +133,37 @@ __device__ inline float randhashf(unsigned int seed, float a, float b) {
 }
 
 __constant__ scalar_t dir[2] = {1, -1}; // avoid thread divergence
-__global__ void reseed_particles_sign(int n_cells, CUVEC::Vec3d *sp, CUVEC::Vec3d *pp, CUVEC::Vec3d *np, scalar_t *LS, scalar_t *LS_grad_x, scalar_t *LS_grad_y, scalar_t *LS_grad_z, int sp_per_cell, int sign_per_cell, scalar_t bandwidth,SimParams *C
-) {
+__global__ void reseed_particles_sign(CUVEC::Vec3d *sp, CUVEC::Vec3d *np, scalar_t *LS, scalar_t *LS_grad_x, scalar_t *LS_grad_y, scalar_t *LS_grad_z, int n_particles, scalar_t bandwidth, SimParams *C) {
     unsigned int p_id = blockIdx.x * blockDim.x + threadIdx.x;
-    unsigned int cell_id = p_id / sign_per_cell;
-    unsigned int p_id_cell = p_id - cell_id*sign_per_cell;
-    unsigned int p_surf_id = p_id_cell + cell_id*sp_per_cell;
 
-    if (cell_id < n_cells) {
-        CUVEC::Vec3d surf = sp[p_surf_id];
+    if (p_id < n_particles) {
+        CUVEC::Vec3d surf = sp[p_id];
         if (surf[0] > -800) {
-            scalar_t offset = 0.25 * C->dx;
+            scalar_t offset = 0.5 * C->dx;
             CUVEC::Vec3d normal = get_normal(surf, LS, LS_grad_x, LS_grad_y, LS_grad_z, *C);
-            CUVEC::Vec3d p0 = surf + dir[0] * offset * normal; // positive LS value
             CUVEC::Vec3d p1 = surf + dir[1] * offset * normal; // negative LS value
 
             unsigned int iter = 0;
             const unsigned int max_iter = 10; // 10 iterations is 1/1000th of the original offset!
-            while (cu_grid_tricerp(p1, LS, false, *C) > 0 || cu_grid_tricerp(p0, LS, false, *C) < 0){
+            while (cu_grid_tricerp(p1, LS, false, *C) > 0){
                 offset *= 0.5;
-                p0 = surf + dir[0] * offset * normal;
                 p1 = surf + dir[1] * offset * normal;
                 iter++;
                 if (iter > max_iter){
-//                    printf("Failed to seed signed particle pair.\n");
-                    pp[p_id] = CUVEC::Vec3d(-1000, -1000, -1000);
-                    np[p_id] = CUVEC::Vec3d(-1000, -1000, -1000);
-                    break;
+                    break; // would like the normal particle to be inside the fluid, but not essential
                 }
             }
 
-            pp[p_id] = p0;
             np[p_id] = p1;
         } else {
             np[p_id] = CUVEC::Vec3d(-1000, -1000, -1000);
-            pp[p_id] = CUVEC::Vec3d(-1000, -1000, -1000);
         }
     }
 }
 
-__host__ void reseed_sign_particles_on_device(int n_cells, CUVEC::Vec3d *sp, CUVEC::Vec3d *pp, CUVEC::Vec3d *np, scalar_t *LS, scalar_t *LS_grad_x, scalar_t *LS_grad_y, scalar_t *LS_grad_z, int sp_per_cell, int sign_per_cell, scalar_t bandwidth, SimParams *C, int threads_in_block) {
-    int n_blocks = (n_cells*sp_per_cell)/threads_in_block + 1;
-    reseed_particles_sign <<< n_blocks, threads_in_block >>> (n_cells, sp, pp, np, LS, LS_grad_x, LS_grad_y, LS_grad_z,
-             sp_per_cell, sign_per_cell, bandwidth, C);
+__host__ void reseed_sign_particles_on_device(CUVEC::Vec3d *sp, CUVEC::Vec3d *np, scalar_t *LS, scalar_t *LS_grad_x, scalar_t *LS_grad_y, scalar_t *LS_grad_z, int n_particles, scalar_t bandwidth, SimParams *C, int threads_in_block) {
+    int n_blocks = (n_particles)/threads_in_block + 1;
+    reseed_particles_sign <<< n_blocks, threads_in_block >>> (sp, np, LS, LS_grad_x, LS_grad_y, LS_grad_z, n_particles, bandwidth, C);
 }
 
 __global__ void reseed_particles_surface(int n_cells, CUVEC::Vec3i *coords, CUVEC::Vec3d *sp, scalar_t *LS, scalar_t *LS_grad_x, scalar_t *LS_grad_y, scalar_t *LS_grad_z, int sp_per_cell, scalar_t bandwidth, SimParams *C) {
@@ -256,15 +244,15 @@ calculate_particle_cells_on_device(int n_blocks, int threads_in_block, int n_p, 
     cuda_check(cudaPeekAtLastError());
 }
 
-__host__ void sort_particles_by_key_on_device(CUVEC::Vec3d *p, int *cell_ids, int n_p) {
-    // GPU implementation
+__host__ void sort_particles_by_key_on_device(CUVEC::Vec3d *p, CUVEC::Vec3d *normal_p, int *cell_ids, int n_p) {
     thrust::device_ptr<CUVEC::Vec3d> vals(p);
+    thrust::device_ptr<CUVEC::Vec3d> vals_2(normal_p);
     thrust::device_ptr<int> keys(cell_ids);
-    thrust::sort_by_key(keys, keys + n_p, vals);
+    thrust::sort_by_key(keys, keys + n_p, thrust::make_zip_iterator( thrust::make_tuple(vals, vals_2)));
 }
 
 __device__ scalar_t
-find_closest_particle(CUVEC::Vec3d *p, int n_p, CUVEC::Vec3d grid_pos, int *cp){
+find_closest_particle(CUVEC::Vec3d *p, int n_p, const CUVEC::Vec3d &grid_pos, int *cp){
     scalar_t best_dist = 2000;
     for (int i = 0; i<n_p; i++){
         CUVEC::Vec3d sep = p[i] - grid_pos;
@@ -278,19 +266,25 @@ find_closest_particle(CUVEC::Vec3d *p, int n_p, CUVEC::Vec3d grid_pos, int *cp){
     return best_dist;
 }
 
-__device__ void do_grid_redistance_now(scalar_t * LS, CUVEC::Vec3d * p, int * count, CUVEC::Vec3d grid_pos, int p_id, int id, int *cp){
-    int n_p = count[id];
+__device__ void do_grid_redistance_now(scalar_t * LS, CUVEC::Vec3d * p, CUVEC::Vec3d *np, const int *count, const CUVEC::Vec3d &grid_pos, int p_id, int id, int *cp){
+    int num_p = count[id];
     int candidate_cp;
-    scalar_t dist = find_closest_particle(&p[p_id], n_p, grid_pos, &candidate_cp);
-    if (dist < *LS){
-        *LS = dist;
+    scalar_t dist = find_closest_particle(&p[p_id], num_p, grid_pos, &candidate_cp);
+    if (dist < abs(*LS)){
         *cp = candidate_cp + p_id;
+        CUVEC::Vec3d normal = np[*cp] - p[*cp];
+        CUVEC::Vec3d sep =  grid_pos - p[*cp];
+        if (CUVEC::dot(normal, sep) <= 0){
+            *LS = dist;
+        } else {
+            *LS = -dist;
+        }
     }
 }
 
 // TODO: Improve performance by using the levelset to determine if its worth even looking for a particle nearby.
 __global__ void
-assign_grid_particle_dist(int n_cells, scalar_t *LS, CUVEC::Vec3d *p, int *index, int *count, int *cp, SimParams *C) {
+assign_grid_particle_dist(int n_cells, scalar_t *LS, CUVEC::Vec3d *p, CUVEC::Vec3d *np, const int *index, int *count, int *cp, SimParams *C) {
     int id = blockIdx.x * blockDim.x + threadIdx.x; // grid index
 //    printf("Processing cell %d, %d, %d\n", i, j, k);
     if (id < n_cells) {
@@ -301,16 +295,17 @@ assign_grid_particle_dist(int n_cells, scalar_t *LS, CUVEC::Vec3d *p, int *index
 
         LS[id] = 1000;
         int p_id = index[id];
+        int n_search = 1;
         if (p_id == -1) {
-            for (int kn = k - 1; kn <= k + 1; kn++) {
-                for (int jn = j - 1; jn <= j + 1; jn++) {
-                    for (int in = i - 1; in <= i + 1; in++) {
+            for (int kn = k - n_search; kn <= k + n_search; kn++) {
+                for (int jn = j - n_search; jn <= j + n_search; jn++) {
+                    for (int in = i - n_search; in <= i + n_search; in++) {
                         if (kn >= 0 && kn < C->grid_d && jn >= 0 && jn < C->grid_h && in >= 0 && in < C->grid_w) {
                             int id_adj = ccti(in, jn, kn, C->grid_w, C->grid_h);
                             p_id = index[id_adj];
                             if (p_id != -1) {
 //                                printf("Redistancing with other cell's particles.\n");
-                                do_grid_redistance_now(&LS[id], p, count, grid_pos, p_id, id_adj, &cp[id]);
+                                do_grid_redistance_now(&LS[id], p, np, count, grid_pos, p_id, id_adj, &cp[id]);
                             }
                         }
                     }
@@ -318,27 +313,40 @@ assign_grid_particle_dist(int n_cells, scalar_t *LS, CUVEC::Vec3d *p, int *index
             }
         } else {
 //            printf("Redistancing with own cell's particles.\n");
-            do_grid_redistance_now(&LS[id], p, count, grid_pos, p_id, id, &cp[id]);
+            do_grid_redistance_now(&LS[id], p, np, count, grid_pos, p_id, id, &cp[id]);
         }
     }
 }
 
 __host__ void update_levelset_distances_on_device(int n_cells, int n_blocks, int threads_per_block,
-                                                  scalar_t *LS, CUVEC::Vec3d *p, int *index, int *count, int *cp, SimParams* C) {
-    assign_grid_particle_dist <<< n_blocks, threads_per_block >>> (n_cells, LS, p, index, count, cp, C);
+                                                  scalar_t *LS, CUVEC::Vec3d *p, CUVEC::Vec3d *np, int *index, int *count, int *cp, SimParams* C) {
+    assign_grid_particle_dist <<< n_blocks, threads_per_block >>> (n_cells, LS, p, np, index, count, cp, C);
     cuda_check(cudaPeekAtLastError());
 }
 
-__global__ void update_LS_signs(int n_cells, scalar_t *LS, scalar_t *LS_p, scalar_t *LS_n) {
-    int id = blockIdx.x * blockDim.x + threadIdx.x;
+__global__ void assign_grid_signs(int n_cells, scalar_t *LS, CUVEC::Vec3d *p, CUVEC::Vec3d *np, int *cp, SimParams *C){
+    unsigned int id = blockIdx.x * blockDim.x + threadIdx.x; // grid index
 
-    if (id < n_cells) {
-        if (LS_p[id] > LS_n[id]) {
-            LS[id] = fabs(LS[id]);
-        } else {
-            LS[id] = -fabs(LS[id]);
+    if (id < n_cells){
+        int i = id % C->grid_w;
+        int j = (id / C->grid_w) % C->grid_h;
+        int k = id / (C->grid_h * C->grid_w);
+        CUVEC::Vec3d grid_pos(i * C->dx, j * C->dx, k * C->dx);
+
+        if (cp[id] != -1) {
+            CUVEC::Vec3d normal = np[cp[id]] - p[cp[id]];
+            CUVEC::Vec3d sep = grid_pos - p[cp[id]];
+            if (CUVEC::dot(normal, sep) <= 0) {
+                *LS = abs(*LS);
+            } else {
+                *LS = -abs(*LS);
+            }
         }
     }
+}
+
+__host__ void update_signs_on_device(int n_cells, int n_blocks, int threads_per_block, scalar_t *LS, CUVEC::Vec3d *p, CUVEC::Vec3d *np, int *cp, SimParams *C){
+    assign_grid_signs<<<n_blocks, threads_per_block>>>(n_cells, LS, p, np, cp, C);
 }
 
 //__global__ void generate_curvature(int n_cells, CUVEC::Vec3d *p, int* index, int* count, scalar_t* curv){

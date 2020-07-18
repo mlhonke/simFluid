@@ -9,7 +9,7 @@ int main(int argc, char** argv){
     int n_steps;
     SimWater::create_params_from_args(argc, argv, n_steps, params, water_params);
     SimWater sim = SimWater(*params, *water_params);
-//    sim.write_mesh = true;
+    sim.write_mesh = true;
 
     // Create scenario.
     CubeXi container(params->grid_w+2, params->grid_w+2, params->grid_w+2, arma::fill::zeros);
@@ -24,10 +24,11 @@ int main(int argc, char** argv){
 
     // Output model for use with rendering.
     SimLabel::triangulate_grid(container, {-1,-1,-1}, SOLID, "../solid.ply", *params);
+    SimLabel::triangulate_grid(sim.fluid_label->label, {-1,-1,-1}, SOLID, "../all.ply", *params);
 
     // Choose a surface tracking method and make an initial surface.
     auto level_set = new SimPLSCUDA(*params, sim.DEV_C, sim.DEV_V);
-//    level_set->reseed_interval = 1;
+    level_set->reseed_interval = 5;
     Vector3 corner = {1, 1, params->grid_d/2.0+1};
     std::cout << corner << std::endl;
     Vector3 corner_2 = {params->grid_w-2.0, params->grid_h/2.0-3, params->grid_d-2.0};
@@ -37,6 +38,7 @@ int main(int argc, char** argv){
     // Run the simulation.
     for (int i = 0; i < n_steps; i++){
         sim.step();
+//        std::cout << level_set->LS << std::endl;
     }
 
     return 0;

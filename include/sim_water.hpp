@@ -30,8 +30,8 @@ public:
 protected:
     void add_gravity_to_velocity(CubeX &v, scalar_t dt);
     void pressure_gradient_update_velocity(CubeX &v, const CubeX &v_solid, const CubeX &p, const CubeX &LS,
-            const Vector3ui &face, scalar_t scale, const SimLabel *label_in, bool do_tension);
-    void pressure_gradient_update(const CubeX &p, scalar_t dt, CubeX& LS, const SimLabel *label_in, bool do_tension = true);
+            const Vector3ui &face, scalar_t scale, const SimLabel *label_in, bool do_tension, bool check_air);
+    void pressure_gradient_update(const CubeX &p, scalar_t dt, CubeX& LS, const SimLabel *label_in, bool do_tension = true, bool check_air = true);
     Vector3 get_interface_position_between_cells(const Vector3ui &wet, const Vector3ui &dry, const CubeX &LS, scalar_t &theta);
     void build_A_element(const Vector3ui &ISC, const Vector3ui &IS, const Vector2ui &IA, scalar_t vel,
             scalar_t vel_solid, MatrixA &A, VectorXs &b, scalar_t scale, const CubeX &LS, unsigned int b_index,

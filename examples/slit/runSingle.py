@@ -7,20 +7,20 @@ os.chdir("cmake-build-debug")
 # Trial Params
 n_steps = 1000000
 
-res = 30
+res = 60
 # SimParams
 grid_w = res
 grid_h = res
 grid_d = res
 dx = 1.0/res
-frac_cfl = 0.5
+frac_cfl = 0.1
 max_dt = 0.1
 render_dt = 0.02
 g = -9.81 
 # SimWaterParams
 density = 1000.0
 sft = 0.0001
-nu = 0.0001
+nu = 0.01
 
 paramNames = ["n_steps",
               "grid_w",

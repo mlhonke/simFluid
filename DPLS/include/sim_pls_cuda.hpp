@@ -33,28 +33,24 @@ public:
 
     // Levelset
     scalar_t* DEV_LS, *DEV_grad_LS_x, *DEV_grad_LS_y, *DEV_grad_LS_z;
-    scalar_t* DEV_LS_pos, *DEV_LS_neg;
     int* DEV_cp;
     CubeXi cp;
-    CubeX LS_pos, LS_neg, LS_unsigned;
+    CubeX LS_unsigned;
 
     // Three kinds of particles
     std::vector<CUVEC::Vec3d> sp;
-    std::vector<CUVEC::Vec3d> pp;
     std::vector<CUVEC::Vec3d> np;
     CUVEC::Vec3d *DEV_sp = nullptr;
-    CUVEC::Vec3d *DEV_pp = nullptr;
     CUVEC::Vec3d *DEV_np = nullptr;
 
     // CPU version of particles
     std::vector<Vector3> surface_points;
-    std::vector<Vector3> pos_points;
     std::vector<Vector3> neg_points;
 
-    std::vector<int> sp_index, np_index, pp_index;
-    std::vector<int> sp_count, np_count, pp_count;
-    int* DEV_sp_index, *DEV_np_index, *DEV_pp_index;
-    int* DEV_sp_count, *DEV_np_count, *DEV_pp_count;
+    std::vector<int> sp_index, np_index;
+    std::vector<int> sp_count, np_count;
+    int* DEV_sp_index, *DEV_np_index;
+    int* DEV_sp_count, *DEV_np_count;
 
     int threads_in_block;
 
